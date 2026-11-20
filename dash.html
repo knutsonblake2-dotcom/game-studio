@@ -189,6 +189,7 @@ code,.cheat dt{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:14p
           <dt>game.sky = "#5ec8ff";
 game.sky2 = "#c9f0ff";</dt><dd>Sky colors, top and bottom. Also groundColor, blockColor, spikeColor.</dd>
           <dt>game.trail = "#ffffff";</dt><dd>Color of the trail behind you. Use "none" to hide it.</dd>
+          <dt>game.crashColor = "#ffd23f";</dt><dd>Color of the splat when you crash.</dd>
           <dt>level(` ... `);</dt><dd>Draw your level with letters. The bottom line is the ground. See "Level letters".</dd>
           <dt>addTile("L", "🔥", "deadly");</dt><dd>Make your own tile. Look can be an emoji, picture name or color. Types: "solid", "deadly", "coin", "bounce", "decoration".</dd>
           <dt>whenJump(function() { ... });</dt><dd>Runs every jump. Also: whenCrash, whenCoin, whenFinish, everySecond.</dd>
@@ -247,6 +248,7 @@ game.groundColor = "#3b2e7a";
 game.blockColor = "#6b5bd6";
 game.spikeColor = "#1b1440";
 game.trail = "#ffffff";
+game.crashColor = "#ffd23f";   // the splat when you crash
 
 // 4. Make your own tiles: addTile(letter, look, type)
 // Types: "solid", "deadly", "coin", "bounce", "decoration"
@@ -434,7 +436,8 @@ function onEvent(name, data){
   else if (name === 'portal'){ sfx('laser'); sparkle(run.x + .5, run.y + .5, '#ffffff', 14); }
   else if (name === 'checkpoint'){ if (practice) setCheckpoint(); }
   else if (name === 'crash'){
-    sfx(game.crashSound); shake = .35; sparkle(run.x + .5, run.y + .5, colorOf(game.player), 34, 9);
+    sfx(game.crashSound); shake = .35; const cc = game.crashColor || colorOf(game.player);
+    sparkle(run.x + .5, run.y + .5, cc, 26, 9); sparkle(run.x + .5, run.y + .5, '#ffffff', 10, 7);
     deadTimer = .75; hooks.crash.forEach(safe);
   }
   else if (name === 'finish'){
@@ -444,7 +447,7 @@ function onEvent(name, data){
   }
 }
 function setCheckpoint(){ cp = { x: run.x, y: run.y, gs: run.gs, mode: run.mode, speedMult: run.speedMult, coins: [...run.coins], used: [...run.used] }; sparkle(run.x + .5, run.y + .5, '#2ec4b6', 10); }
-function colorOf(look){ return /^#|^rgb|^hsl/.test(String(look)) ? look : '#ff4f8b'; }
+function colorOf(look){ return /^#|^rgb|^hsl/.test(String(look)) ? look : '#ffd23f'; }
 function progress(){ return run ? Math.max(0, Math.min(100, Math.floor(run.x / Math.max(1, finishX) * 100))) : 0; }
 function levelKey(){ return String(game.name) + '|' + LW + 'x' + LH; }
 function record(p){
