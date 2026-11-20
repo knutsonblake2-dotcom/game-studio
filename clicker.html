@@ -150,6 +150,19 @@ input[type=range]{accent-color:var(--coral);width:130px}
 .filebtn{display:inline-flex;align-items:center;position:relative;overflow:hidden}
 .filebtn input{position:absolute;inset:0;opacity:0;cursor:pointer;font-size:0}
 .filebtn:focus-within{outline:3px solid var(--coral);outline-offset:3px}
+.modes{display:inline-flex;gap:0;border:3px solid var(--line);border-radius:14px;overflow:hidden;margin:0 0 12px}
+.modes button{min-height:44px;padding:0 20px;border:0;background:var(--card);font-weight:800}
+.modes button+button{border-left:3px solid var(--line)}
+.modes button[aria-pressed=true]{background:var(--line);color:#fff}
+.headrow{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between}
+.headrow h2{margin:0 0 12px}
+#blocklyDiv{height:620px;width:100%;border:3px solid var(--line);border-radius:16px;overflow:hidden;background:#f6f9ff}
+#genCode{margin:12px 0 0;max-height:320px;overflow:auto;background:var(--code-bg);color:var(--code-ink);border-radius:14px;padding:12px 14px;font:13px/1.5 "JetBrains Mono",ui-monospace,monospace;white-space:pre}
+.blocklyToolboxCategory{min-height:40px}
+@media(max-width:820px){#blocklyDiv{height:520px}}
+.minirow{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
+.paused{position:absolute;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(19,33,58,.72);color:#fff}
+.paused b{font-size:44px;line-height:1}
 [hidden]{display:none!important}
 @media(max-width:820px){.play,.build{grid-template-columns:minmax(0,1fr)}textarea{min-height:420px}}
 @media(prefers-reduced-motion:reduce){.float{animation:none;opacity:0}.toast{transition:none}.clicker{transition:none}}
@@ -176,7 +189,8 @@ input[type=range]{accent-color:var(--coral);width:130px}
         <button class="clicker" id="clicker" aria-label="Click me"></button>
         <div class="hand" id="hand" hidden></div>
         <div class="msg" id="msg" aria-live="polite"></div>
-        <button class="mini" id="musicToggle">Music: off</button>
+        <div class="minirow"><button class="mini" id="pauseBtn">Pause</button> <button class="mini" id="musicToggle">Music: off</button></div>
+        <div class="paused" id="pausedOverlay" hidden><b>Paused</b><button class="btn go" id="resumeBtn">Keep playing</button></div>
       </div>
     </div>
     <div class="side">
@@ -188,8 +202,20 @@ input[type=range]{accent-color:var(--coral);width:130px}
 
   <section id="build" class="build" hidden>
     <div class="card">
-      <h2>Your game code</h2>
+      <div class="headrow"><h2>Your game</h2>
+        <div class="modes" role="group" aria-label="Build with"><button id="modeBlocks" aria-pressed="true">Blocks</button><button id="modeCode" aria-pressed="false">Code</button></div></div>
+      <div id="blocksArea">
+        <div id="blocklyDiv"></div>
+        <p class="ok" id="blockMsg"></p>
+        <div class="row">
+          <button class="btn" id="showGen">Show my code</button>
+          <button class="btn" id="toCode">Turn my blocks into code</button>
+        </div>
+        <pre id="genCode" hidden></pre>
+      </div>
+      <div id="codeArea" hidden>
       <textarea id="code" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off" aria-label="Game code"></textarea>
+      </div>
       <div class="row">
         <button class="btn go" id="run">Run my code</button>
         <button class="btn" id="resetScore">Reset score</button>
@@ -213,7 +239,7 @@ input[type=range]{accent-color:var(--coral);width:130px}
         <div class="err" id="saveErr"></div>
         <p class="ok" id="saveOk"></p>
       </div>
-      <div class="card">
+      <div class="card" id="pickCard" hidden>
         <h2>Pick a color</h2>
         <p class="hint" style="margin-top:0">1. Tap the line in your code with the color. 2. Pick a color. 3. Tap "Put it in my code".</p>
         <div class="swatches" id="swatches"></div>
@@ -455,9 +481,7 @@ function friendly(e){
 }
 
 function runCode(){
-  const src = $('code').value.replace(/[“”„″]/g, '"').replace(/[‘’‚′]/g, "'");
-  if (src !== $('code').value) $('code').value = src;
-  store.set('cgs-code', src);
+  const src = currentSource();
   freshGame();
   try {
     const names = Object.keys(api);
@@ -994,7 +1018,7 @@ function saveMsg(ok, err){ $('saveOk').textContent = ok || ''; $('saveErr').text
 $('saveGame').onclick = () => {
   store.set('cgs-code', $('code').value);
   const data = { app: 'clicker-game-studio', version: 1, savedAt: new Date().toISOString(),
-    code: $('code').value, images, music, state };
+    code: $('code').value, images, music, state, blocks: savedBlocks(), mode: BK.mode };
   const slug = (String(game.name || 'my-game').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'my-game');
   const file = slug + '.json';
   if (window.self !== window.top){
@@ -1032,6 +1056,9 @@ function openPending(){
   const d = pendingGame; pendingGame = null;
   $('confirmOpen').hidden = true;
   $('code').value = d.code;
+  if (d.blocks){ store.set(KEYP + 'blocks', JSON.stringify(d.blocks)); if (BK.ws){ BK.ws.clear(); try { Blockly.serialization.workspaces.load(d.blocks, BK.ws); } catch(e){} } }
+  if (d.mode === 'blocks' || d.mode === 'code') setMode(d.mode);
+  if (BK.mode === 'blocks') ensureBlockly().then(ok => { if (ok) runCode(); });
   if (d.images && typeof d.images === 'object') images = Object.assign({}, d.images);
   if (d.music && Array.isArray(d.music.grid) && d.music.grid.length === ROWS.length){ stopMusic(); music = d.music; }
   if (d.state && typeof d.state === 'object'){
@@ -1048,7 +1075,22 @@ function openPending(){
 // ---------- Game loop ----------
 function save(){ store.set('cgs-state', JSON.stringify(state)); }
 let ticks = 0;
+// ---------- Pause ----------
+let paused = false, pausedAt = 0, musicWasOn = false;
+function setPaused(p){
+  if (p === paused) return;
+  paused = p; $('pausedOverlay').hidden = !p; $('pauseBtn').textContent = p ? 'Resume' : 'Pause';
+  if (p){ pausedAt = Date.now(); musicWasOn = playing; if (playing) stopMusic(); save(); }
+  else {
+    const d = Date.now() - pausedAt;
+    boosts.forEach(b => b.until += d); if (auto.until) auto.until += d;
+    if (musicWasOn) startMusic();
+  }
+}
+$('pauseBtn').onclick = () => setPaused(!paused);
+$('resumeBtn').onclick = () => setPaused(false);
 setInterval(() => {
+  if (paused) return;
   const ps = perSecond();
   if (ps) api.addPoints(ps / 10);
   autoTick();
@@ -1057,10 +1099,243 @@ setInterval(() => {
 }, 100);
 addEventListener('pagehide', save);
 
+
+// ---------- Blocks mode (Blockly) ----------
+// Blocks turn into the exact same commands as typed code, then run through runCode().
+const KEYP = 'cgs-';
+const BK = { mode: store.get(KEYP + 'mode') || 'blocks', ws: null, loading: null, defined: false };
+const q = s => JSON.stringify(String(s ?? ''));
+const ORD = () => (window.javascript && window.javascript.Order) || { ATOMIC: 0, FUNCTION_CALL: 2, ADDITION: 6.2, NONE: 99 };
+const GEN = () => Blockly.JavaScript;
+const COLORS = [['🟥 red', '#ff3b30'], ['🟧 orange', '#ff9500'], ['🟨 gold', '#ffd23f'], ['🟩 green', '#34c759'], ['🌊 teal', '#2ec4b6'],
+  ['🩵 sky blue', '#5ec8ff'], ['🟦 blue', '#2f6bff'], ['🟪 purple', '#8f6bff'], ['🩷 pink', '#ff4f8b'], ['🟫 brown', '#8b5a2b'],
+  ['⬜ white', '#ffffff'], ['⬛ black', '#13213a'], ['🍑 peach', '#ffe9c7'], ['🌙 night', '#1b1440']];
+const SOUNDS_LIST = [['pop', 'pop'], ['coin', 'coin'], ['laser', 'laser'], ['boing', 'boing'], ['kick drum', 'kick'], ['snare', 'snare'], ['clap', 'clap'], ['hi-hat', 'hat']];
+
+function loadScript(src){
+  return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => { s.remove(); rej(); }; document.head.appendChild(s); });
+}
+function ensureBlockly(){
+  if (BK.defined) return Promise.resolve(true);
+  if (!BK.loading){
+    BK.loading = (window.Blockly && window.Blockly.JavaScript ? Promise.resolve() :
+      loadScript('vendor/blockly-13.4.0.min.js').catch(() => loadScript('https://cdn.jsdelivr.net/npm/blockly@13.4.0/blockly.min.js')))
+      .then(() => { defineAllBlocks(); BK.defined = true; return true; })
+      .catch(() => false);
+  }
+  return BK.loading;
+}
+function def(type, json, gen, after){
+  Blockly.Blocks[type] = { init(){ this.jsonInit(json); if (after) after(this); } };
+  GEN().forBlock[type] = gen;
+}
+function defineAllBlocks(){
+  def('x_color', { message0: '%1', args0: [{ type: 'field_dropdown', name: 'C', options: COLORS }], output: 'String', colour: 0, tooltip: 'A color' },
+    b => [q(b.getFieldValue('C')), ORD().ATOMIC]);
+  def('x_say', { message0: 'say %1', args0: [{ type: 'input_value', name: 'V' }], previousStatement: null, nextStatement: null, colour: 330, tooltip: 'Show a message' },
+    b => `say(${GEN().valueToCode(b, 'V', ORD().NONE) || '""'});\n`);
+  def('x_sound', { message0: 'play sound %1', args0: [{ type: 'field_dropdown', name: 'S', options: SOUNDS_LIST }], previousStatement: null, nextStatement: null, colour: 330 },
+    b => `playSound(${q(b.getFieldValue('S'))});\n`);
+  def('x_chance', { message0: '%1 out of 100 chance', args0: [{ type: 'field_number', name: 'N', value: 10, min: 0, max: 100 }], output: 'Boolean', colour: 260, tooltip: 'True some of the time' },
+    b => [`randomChance(${Number(b.getFieldValue('N'))})`, ORD().FUNCTION_CALL]);
+  def('x_random', { message0: 'random number %1 to %2', args0: [{ type: 'field_number', name: 'A', value: 1 }, { type: 'field_number', name: 'B', value: 6 }], output: 'Number', colour: 260 },
+    b => [`randomNumber(${Number(b.getFieldValue('A'))}, ${Number(b.getFieldValue('B'))})`, ORD().FUNCTION_CALL]);
+  defineGameBlocks();
+}
+const SH = { text: t => ({ shadow: { type: 'text', fields: { TEXT: t } } }), num: n => ({ shadow: { type: 'math_number', fields: { NUM: n } } }), color: c => ({ shadow: { type: 'x_color', fields: { C: c } } }) };
+function chain(list){ for (let i = list.length - 2; i >= 0; i--) list[i].next = { block: list[i + 1] }; return list[0]; }
+
+function savedBlocks(){
+  if (BK.ws) return Blockly.serialization.workspaces.save(BK.ws);
+  return readJSON(KEYP + 'blocks', null) || STARTER_BLOCKS();
+}
+function blocksToCode(){
+  if (!BK.defined) return store.get(KEYP + 'gen') || EXAMPLE_FALLBACK;
+  let code;
+  if (BK.ws) code = GEN().workspaceToCode(BK.ws);
+  else {
+    const ws = new Blockly.Workspace();
+    try { Blockly.serialization.workspaces.load(savedBlocks(), ws); code = GEN().workspaceToCode(ws); }
+    catch(e){ console.warn('Blocks could not load:', e); code = store.get(KEYP + 'gen') || EXAMPLE_FALLBACK; }
+    finally { ws.dispose(); }
+  }
+  store.set(KEYP + 'gen', code);
+  return code;
+}
+function showBlocksUI(){
+  if (!BK.defined || $('blocksArea').hidden) return;
+  if (BK.ws){ Blockly.svgResize(BK.ws); return; }
+  const theme = Blockly.Theme.defineTheme('studio-' + KEYP, { base: Blockly.Themes.Classic, fontStyle: BLOCK_FONT,
+    componentStyles: { workspaceBackgroundColour: '#f6f9ff', toolboxBackgroundColour: '#13213a', toolboxForegroundColour: '#ffffff', flyoutBackgroundColour: '#e8eefb', flyoutOpacity: 1, scrollbarColour: '#9aa7c7' } });
+  const fromStarter = !readJSON(KEYP + 'blocks', null);
+  const initial = savedBlocks();
+  BK.ws = Blockly.inject('blocklyDiv', { toolbox: TOOLBOX, trashcan: true, sounds: false, renderer: 'zelos', theme,
+    zoom: { controls: true, wheel: false, pinch: true, startScale: .72, maxScale: 1.6, minScale: .35 }, move: { scrollbars: true, drag: true, wheel: true } });
+  try { Blockly.serialization.workspaces.load(initial, BK.ws); }
+  catch(e){ Blockly.serialization.workspaces.load(STARTER_BLOCKS(), BK.ws); }
+  if (fromStarter && KEYP === 'dgs-') BK.ws.cleanUp();
+  BK.ws.addChangeListener(e => {
+    if (e.isUiEvent) return;
+    store.set(KEYP + 'blocks', JSON.stringify(Blockly.serialization.workspaces.save(BK.ws)));
+    if (!$('genCode').hidden) $('genCode').textContent = blocksToCode();
+  });
+}
+function setMode(m){
+  BK.mode = m; store.set(KEYP + 'mode', m);
+  $('modeBlocks').setAttribute('aria-pressed', m === 'blocks'); $('modeCode').setAttribute('aria-pressed', m === 'code');
+  $('codeArea').hidden = m !== 'code'; $('blocksArea').hidden = m !== 'blocks';
+  if ($('pickCard')) $('pickCard').hidden = m !== 'code';
+  if (m === 'blocks'){
+    $('blockMsg').textContent = BK.defined ? '' : 'Loading blocks…';
+    ensureBlockly().then(ok => {
+      if (!ok){ $('blockMsg').textContent = "Blocks couldn't load on this network. Use Code mode for now."; return; }
+      $('blockMsg').textContent = '';
+      showBlocksUI();
+    });
+  }
+}
+$('modeBlocks').onclick = () => setMode('blocks');
+$('modeCode').onclick = () => setMode('code');
+$('tab-build').addEventListener('click', () => setTimeout(showBlocksUI, 0));
+addEventListener('resize', () => { if (BK.ws && !$('blocksArea').hidden) Blockly.svgResize(BK.ws); });
+$('showGen').onclick = () => {
+  const pre = $('genCode'); pre.hidden = !pre.hidden;
+  $('showGen').textContent = pre.hidden ? 'Show my code' : 'Hide my code';
+  if (!pre.hidden) pre.textContent = blocksToCode();
+};
+$('toCode').onclick = () => twice($('toCode'), 'Turn my blocks into code', () => {
+  $('code').value = blocksToCode(); store.set(KEYP + 'code', $('code').value);
+  setMode('code'); runCode();
+  $('ok').textContent = 'Your blocks are now code! You can switch back to Blocks anytime; your blocks are saved.';
+});
+$('example').onclick = () => twice($('example'), 'Start over with example', () => {
+  if (BK.mode === 'blocks'){
+    store.set(KEYP + 'blocks', JSON.stringify(STARTER_BLOCKS()));
+    if (BK.ws){ BK.ws.clear(); Blockly.serialization.workspaces.load(STARTER_BLOCKS(), BK.ws); if (KEYP === 'dgs-') BK.ws.cleanUp(); BK.ws.scrollCenter(); }
+  } else $('code').value = EXAMPLE_FALLBACK;
+  runCode();
+});
+function currentSource(){
+  if (BK.mode === 'blocks') return blocksToCode();
+  const raw = $('code').value, src = raw.replace(/[“”„″]/g, '"').replace(/[‘’‚′]/g, "'");
+  if (src !== raw) $('code').value = src;
+  store.set(KEYP + 'code', src);
+  return src;
+}
+
+const EXAMPLE_FALLBACK = EXAMPLE;
+const BLOCK_FONT = { family: '"Baloo 2", ui-rounded, system-ui, sans-serif', weight: '700', size: 13 };
+const RARITY_OPTS = [['common', 'common'], ['rare', 'rare'], ['epic', 'epic'], ['legendary', 'legendary']];
+const EFFECT_OPTS = [['sparkles', 'sparkles'], ['confetti', 'confetti'], ['stars', 'stars'], ['hearts', 'hearts'], ['bubbles', 'bubbles'], ['ring', 'ring'], ['tiny clickers', 'clicker'], ['nothing', 'none']];
+function defineGameBlocks(){
+  const S = { previousStatement: null, nextStatement: null };
+  const set = (type, msg, prop, field, colour, tip) => def(type, Object.assign({ message0: msg, args0: [field], colour, tooltip: tip || '' }, S),
+    b => `game.${prop} = ${field.type === 'field_number' ? Number(b.getFieldValue('V')) : field.type === 'field_checkbox' ? (b.getFieldValue('V') === 'TRUE') : q(b.getFieldValue('V'))};\n`);
+  // Game settings
+  set('c_name', 'game name %1', 'name', { type: 'field_input', name: 'V', text: 'Cookie Clicker' }, 45);
+  set('c_points_name', 'points are called %1', 'pointsName', { type: 'field_input', name: 'V', text: 'cookies' }, 45);
+  set('c_clicker', 'clicker looks like %1', 'clicker', { type: 'field_input', name: 'V', text: '🍪' }, 45, 'An emoji, or the name of one of your pictures');
+  set('c_per_click', 'points per click %1', 'pointsPerClick', { type: 'field_number', name: 'V', value: 1, min: 0 }, 45);
+  def('c_color', Object.assign({ message0: 'color of %1 is %2', args0: [{ type: 'field_dropdown', name: 'P', options: [['background', 'background'], ['button', 'buttonColor'], ['text', 'textColor']] }, { type: 'input_value', name: 'V' }], colour: 45 }, S),
+    b => `game.${b.getFieldValue('P')} = ${GEN().valueToCode(b, 'V', ORD().NONE) || '"white"'};\n`);
+  // Effects
+  def('c_effect_set', Object.assign({ message0: 'click effect %1 with %2 pieces', args0: [{ type: 'field_dropdown', name: 'E', options: EFFECT_OPTS }, { type: 'field_number', name: 'N', value: 10, min: 1, max: 60 }], colour: 300 }, S),
+    b => `game.clickEffect = ${q(b.getFieldValue('E'))};\ngame.effectAmount = ${Number(b.getFieldValue('N'))};\n`);
+  def('c_sound_set', Object.assign({ message0: 'click sound %1', args0: [{ type: 'field_dropdown', name: 'S', options: SOUNDS_LIST.concat([['none', 'none']]) }], colour: 300 }, S),
+    b => `game.clickSound = ${q(b.getFieldValue('S'))};\n`);
+  set('c_minis', 'tiny clickers pop out %1', 'miniClickers', { type: 'field_number', name: 'V', value: 3, min: 0, max: 12 }, 300);
+  set('c_shake', 'shake when clicked %1', 'shake', { type: 'field_checkbox', name: 'V', checked: false }, 300);
+  // Shop
+  def('c_upgrade', Object.assign({ message0: 'upgrade %1 %2 costs %3 gives + %4 %5', args0: [
+    { type: 'field_input', name: 'NAME', text: 'Sprinkles' }, { type: 'field_input', name: 'ICON', text: '✨' }, { type: 'field_number', name: 'COST', value: 15, min: 1 },
+    { type: 'field_number', name: 'AMT', value: 1, min: 0 }, { type: 'field_dropdown', name: 'KIND', options: [['per click', 'perClick'], ['per second', 'perSecond']] }], colour: 20, tooltip: 'Something to buy in the shop' }, S),
+    b => `addUpgrade(${q(b.getFieldValue('NAME'))}, ${q(b.getFieldValue('ICON'))}, ${Number(b.getFieldValue('COST'))}, { ${b.getFieldValue('KIND')}: ${Number(b.getFieldValue('AMT'))} });\n`);
+  // Prizes
+  def('c_prize', Object.assign({ message0: 'prize %1 %2 at %3 points', args0: [{ type: 'field_input', name: 'NAME', text: 'First Bite' }, { type: 'field_input', name: 'ICON', text: '🥇' }, { type: 'field_number', name: 'GOAL', value: 10, min: 0 }], colour: 290 }, S),
+    b => `addPrize(${q(b.getFieldValue('NAME'))}, ${q(b.getFieldValue('ICON'))}, ${Number(b.getFieldValue('GOAL'))});\n`);
+  def('c_prize_secret', Object.assign({ message0: 'secret prize %1 %2', args0: [{ type: 'field_input', name: 'NAME', text: 'Golden Crown' }, { type: 'field_input', name: 'ICON', text: '👑' }], colour: 290, tooltip: 'Only a special can unlock this' }, S),
+    b => `addPrize(${q(b.getFieldValue('NAME'))}, ${q(b.getFieldValue('ICON'))}, "secret");\n`);
+  // Specials
+  const rar = { type: 'field_dropdown', name: 'R', options: RARITY_OPTS };
+  const nm = t => ({ type: 'field_input', name: 'NAME', text: t });
+  def('c_bonus_points', Object.assign({ message0: 'special %2 is %1 and gives %3 points', args0: [rar, nm('Lucky Cookie'), { type: 'field_number', name: 'N', value: 25, min: 0 }], colour: 160 }, S),
+    b => `addBonus(${q(b.getFieldValue('NAME'))}, ${q(b.getFieldValue('R'))}, { points: ${Number(b.getFieldValue('N'))} });\n`);
+  def('c_bonus_boost', Object.assign({ message0: 'special %2 is %1 and gives x %3 for %4 seconds', args0: [rar, nm('Lightning Oven'), { type: 'field_number', name: 'M', value: 3, min: 1 }, { type: 'field_number', name: 'S', value: 10, min: 1 }], colour: 160 }, S),
+    b => `addBonus(${q(b.getFieldValue('NAME'))}, ${q(b.getFieldValue('R'))}, { multiplier: ${Number(b.getFieldValue('M'))}, seconds: ${Number(b.getFieldValue('S'))} });\n`);
+  def('c_bonus_auto', Object.assign({ message0: 'special %2 is %1 and auto-clicks for %3 seconds', args0: [rar, nm('Robot Hand'), { type: 'field_number', name: 'S', value: 60, min: 1 }], colour: 160 }, S),
+    b => `addBonus(${q(b.getFieldValue('NAME'))}, ${q(b.getFieldValue('R'))}, { autoClick: ${Number(b.getFieldValue('S'))} });\n`);
+  def('c_bonus_prize', Object.assign({ message0: 'special %2 is %1 and unlocks prize %3', args0: [rar, nm('Golden Crown'), { type: 'field_input', name: 'P', text: 'Golden Crown' }], colour: 160 }, S),
+    b => `addBonus(${q(b.getFieldValue('NAME'))}, ${q(b.getFieldValue('R'))}, { prize: ${q(b.getFieldValue('P'))}, points: 100 });\n`);
+  def('c_chance_set', Object.assign({ message0: 'chance of %1 specials %2 out of 100', args0: [rar, { type: 'field_number', name: 'N', value: 2, min: 0, max: 100 }], colour: 160 }, S),
+    b => `game.chances.${b.getFieldValue('R')} = ${Number(b.getFieldValue('N'))};\n`);
+  // Rebirth
+  def('c_rebirth', Object.assign({ message0: 'rebirth costs %1 points and adds x %2', args0: [{ type: 'field_number', name: 'C', value: 5000, min: 0 }, { type: 'field_number', name: 'B', value: 1, min: 0 }], colour: 200 }, S),
+    b => `game.rebirthCost = ${Number(b.getFieldValue('C'))};\ngame.rebirthBonus = ${Number(b.getFieldValue('B'))};\n`);
+  // Events
+  const ev = (type, msg, fn) => def(type, { message0: msg + ' %1 %2', args0: [{ type: 'input_dummy' }, { type: 'input_statement', name: 'DO' }], colour: 210 },
+    b => `${fn}(function() {\n${GEN().statementToCode(b, 'DO')}});\n`);
+  ev('c_when_clicked', 'when clicked', 'whenClicked');
+  ev('c_every_second', 'every second', 'everySecond');
+  ev('c_when_rebirth', 'when I rebirth', 'whenRebirth');
+  // Actions
+  def('c_add_points', Object.assign({ message0: 'add %1 points', args0: [{ type: 'input_value', name: 'V', check: 'Number' }], colour: 330 }, S),
+    b => `addPoints(${GEN().valueToCode(b, 'V', ORD().NONE) || 0});\n`);
+  def('c_show_effect', Object.assign({ message0: 'show effect %1', args0: [{ type: 'field_dropdown', name: 'E', options: EFFECT_OPTS.slice(0, 6) }], colour: 330 }, S),
+    b => `effect(${q(b.getFieldValue('E'))});\n`);
+  def('c_unlock', Object.assign({ message0: 'unlock prize %1', args0: [{ type: 'field_input', name: 'P', text: 'Golden Crown' }], colour: 330 }, S),
+    b => `unlockPrize(${q(b.getFieldValue('P'))});\n`);
+  def('c_auto', Object.assign({ message0: 'auto-click for %1 seconds', args0: [{ type: 'field_number', name: 'S', value: 10, min: 1 }], colour: 330 }, S),
+    b => `autoClick(${Number(b.getFieldValue('S'))});\n`);
+  // Values
+  def('c_points', { message0: 'my points', output: 'Number', colour: 260 }, () => ['getPoints()', ORD().FUNCTION_CALL]);
+  def('c_rebirths', { message0: 'my rebirths', output: 'Number', colour: 260 }, () => ['getRebirths()', ORD().FUNCTION_CALL]);
+  def('c_owns', { message0: 'how many %1 I own', args0: [{ type: 'field_input', name: 'N', text: 'Grandma Baker' }], output: 'Number', colour: 260 },
+    b => [`owns(${q(b.getFieldValue('N'))})`, ORD().FUNCTION_CALL]);
+}
+const TOOLBOX = { kind: 'categoryToolbox', contents: [
+  { kind: 'category', name: 'Game', colour: '45', contents: ['c_name', 'c_points_name', 'c_clicker', 'c_per_click'].map(t => ({ kind: 'block', type: t }))
+    .concat([{ kind: 'block', type: 'c_color', inputs: { V: SH.color('#ffe9c7') } }]) },
+  { kind: 'category', name: 'Shop', colour: '20', contents: [{ kind: 'block', type: 'c_upgrade' }] },
+  { kind: 'category', name: 'Prizes', colour: '290', contents: [{ kind: 'block', type: 'c_prize' }, { kind: 'block', type: 'c_prize_secret' }] },
+  { kind: 'category', name: 'Specials', colour: '160', contents: ['c_bonus_points', 'c_bonus_boost', 'c_bonus_auto', 'c_bonus_prize', 'c_chance_set'].map(t => ({ kind: 'block', type: t })) },
+  { kind: 'category', name: 'Effects', colour: '300', contents: ['c_effect_set', 'c_sound_set', 'c_minis', 'c_shake'].map(t => ({ kind: 'block', type: t })) },
+  { kind: 'category', name: 'Rebirth', colour: '200', contents: [{ kind: 'block', type: 'c_rebirth' }] },
+  { kind: 'category', name: 'Events', colour: '210', contents: ['c_when_clicked', 'c_every_second', 'c_when_rebirth'].map(t => ({ kind: 'block', type: t })) },
+  { kind: 'category', name: 'Actions', colour: '330', contents: [
+    { kind: 'block', type: 'x_say', inputs: { V: SH.text('Nice!') } }, { kind: 'block', type: 'c_add_points', inputs: { V: SH.num(10) } },
+    { kind: 'block', type: 'x_sound' }, { kind: 'block', type: 'c_show_effect' }, { kind: 'block', type: 'c_unlock' }, { kind: 'block', type: 'c_auto' }] },
+  { kind: 'category', name: 'Logic', colour: '210', contents: [{ kind: 'block', type: 'controls_if' }, { kind: 'block', type: 'logic_compare' }, { kind: 'block', type: 'logic_operation' }, { kind: 'block', type: 'x_chance' }] },
+  { kind: 'category', name: 'Numbers', colour: '260', contents: [{ kind: 'block', type: 'math_number' }, { kind: 'block', type: 'math_arithmetic' },
+    { kind: 'block', type: 'c_points' }, { kind: 'block', type: 'c_rebirths' }, { kind: 'block', type: 'c_owns' }, { kind: 'block', type: 'x_random' }] },
+  { kind: 'category', name: 'Words', colour: '160', contents: [{ kind: 'block', type: 'text' }, { kind: 'block', type: 'text_join' }, { kind: 'block', type: 'x_color' }] }
+] };
+function STARTER_BLOCKS(){
+  const B = (type, fields, inputs) => ({ type, fields, inputs });
+  const setup = chain([
+    B('c_name', { V: 'Cookie Clicker' }), B('c_points_name', { V: 'cookies' }), B('c_clicker', { V: '🍪' }), B('c_per_click', { V: 1 }),
+    B('c_color', { P: 'background' }, { V: SH.color('#ffe9c7') }), B('c_color', { P: 'buttonColor' }, { V: SH.color('#ff9500') }),
+    B('c_effect_set', { E: 'sparkles', N: 10 }), B('c_sound_set', { S: 'pop' }), B('c_minis', { V: 3 }),
+    B('c_upgrade', { NAME: 'Sprinkles', ICON: '✨', COST: 15, AMT: 1, KIND: 'perClick' }),
+    B('c_upgrade', { NAME: 'Grandma Baker', ICON: '👵', COST: 50, AMT: 1, KIND: 'perSecond' }),
+    B('c_upgrade', { NAME: 'Cookie Factory', ICON: '🏭', COST: 400, AMT: 8, KIND: 'perSecond' }),
+    B('c_prize', { NAME: 'First Bite', ICON: '🥇', GOAL: 10 }), B('c_prize', { NAME: 'Snack Time', ICON: '🥛', GOAL: 100 }),
+    B('c_prize', { NAME: 'Cookie Monster', ICON: '👾', GOAL: 1000 }), B('c_prize_secret', { NAME: 'Golden Crown', ICON: '👑' }),
+    B('c_bonus_points', { R: 'common', NAME: 'Lucky Cookie', N: 25 }), B('c_bonus_boost', { R: 'rare', NAME: 'Lightning Oven', M: 3, S: 10 }),
+    B('c_bonus_auto', { R: 'epic', NAME: 'Robot Hand', S: 60 }), B('c_bonus_prize', { R: 'legendary', NAME: 'Golden Crown', P: 'Golden Crown' }),
+    B('c_rebirth', { C: 5000, B: 1 })
+  ]);
+  const clicked = B('c_when_clicked', {}, { DO: { block: B('controls_if', {}, {
+    IF0: { block: B('x_chance', { N: 5 }) },
+    DO0: { block: chain([B('x_say', {}, { V: SH.text('Golden cookie! +25') }), B('c_add_points', {}, { V: SH.num(25) }), B('c_show_effect', { E: 'confetti' })]) } }) } });
+  return { blocks: { languageVersion: 0, blocks: [Object.assign(setup, { x: 20, y: 20 }), Object.assign(clicked, { x: 560, y: 20 })] } };
+}
+
 $('code').value = store.get('cgs-code') || EXAMPLE;
 renderPics();
 renderGrid();
+setMode(BK.mode);
 runCode();
+if (BK.mode === 'blocks') ensureBlockly().then(ok => { if (ok) runCode(); });
 // ---------- Color picker that writes the code for you ----------
 {
   const SW = [['red','#ff3b30'],['orange','#ff9500'],['gold','#ffd23f'],['green','#34c759'],['teal','#2ec4b6'],['sky blue','#5ec8ff'],

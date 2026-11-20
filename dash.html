@@ -99,6 +99,16 @@ code,.cheat dt{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:14p
 .cell.now{box-shadow:0 0 0 3px var(--pink)}
 .cell.now[aria-pressed=true]{transform:scale(1.12)}
 .mel{--c:var(--teal)}.bass{--c:#8f6bff}.drum{--c:var(--pink)}
+.modes{display:inline-flex;gap:0;border:3px solid var(--line);border-radius:14px;overflow:hidden;margin:0 0 12px}
+.modes button{min-height:44px;padding:0 20px;border:0;background:var(--card);font-weight:800}
+.modes button+button{border-left:3px solid var(--line)}
+.modes button[aria-pressed=true]{background:var(--line);color:#fff}
+.headrow{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between}
+.headrow h2{margin:0 0 12px}
+#blocklyDiv{height:620px;width:100%;border:3px solid var(--line);border-radius:16px;overflow:hidden;background:#f6f9ff}
+#genCode{margin:12px 0 0;max-height:320px;overflow:auto;background:var(--code-bg);color:var(--code-ink);border-radius:14px;padding:12px 14px;font:13px/1.5 "JetBrains Mono",ui-monospace,monospace;white-space:pre}
+.blocklyToolboxCategory{min-height:40px}
+@media(max-width:820px){#blocklyDiv{height:520px}}
 [hidden]{display:none!important}
 @media(max-width:820px){.build{grid-template-columns:minmax(0,1fr)}textarea{min-height:460px}.controls .tip{margin-left:0}}
 @media(prefers-reduced-motion:reduce){.cell{transition:none}}
@@ -122,16 +132,29 @@ code,.cheat dt{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:14p
       <div class="controls">
         <button class="btn" id="practice" aria-pressed="false">Practice mode</button>
         <button class="btn" id="musicToggle" aria-pressed="true">Music: on</button>
+        <button class="btn" id="pauseBtn">Pause</button>
         <button class="btn" id="restart">Restart</button>
-        <span class="tip">Tap, click, or press space to jump. Hold to keep jumping.</span>
+        <span class="tip">Tap, click, or press space to jump. Hold to keep jumping. P pauses.</span>
       </div>
     </div>
   </section>
 
   <section id="build" class="build" hidden>
     <div class="card">
-      <h2>Your game code</h2>
+      <div class="headrow"><h2>Your game</h2>
+        <div class="modes" role="group" aria-label="Build with"><button id="modeBlocks" aria-pressed="true">Blocks</button><button id="modeCode" aria-pressed="false">Code</button></div></div>
+      <div id="blocksArea">
+        <div id="blocklyDiv"></div>
+        <p class="ok" id="blockMsg"></p>
+        <div class="row">
+          <button class="btn" id="showGen">Show my code</button>
+          <button class="btn" id="toCode">Turn my blocks into code</button>
+        </div>
+        <pre id="genCode" hidden></pre>
+      </div>
+      <div id="codeArea" hidden>
       <textarea id="code" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off" aria-label="Game code"></textarea>
+      </div>
       <div class="row">
         <button class="btn go" id="run">Run my code</button>
         <button class="btn" id="example">Start over with example</button>
@@ -167,7 +190,7 @@ code,.cheat dt{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:14p
           <li><code>␣</code>empty space</li>
         </ul>
       </div>
-      <div class="card">
+      <div class="card" id="pickCard" hidden>
         <h2>Pick a color</h2>
         <p class="hint" style="margin-top:0">1. Tap the line in your code with the color. 2. Pick a color. 3. Tap "Put it in my code".</p>
         <div class="swatches" id="swatches"></div>
@@ -486,7 +509,7 @@ function startAttempt(){
   camX = run.x - 3;
   if (game.music !== false && musicOn) restartMusic();
 }
-function fullRestart(){ cp = null; attempts = 0; stopMusic(); mode = 'ready'; run = newRun(); camX = -3; record(0); }
+function fullRestart(){ cp = null; attempts = 0; stopMusic(); mode = 'ready'; $('pauseBtn').textContent = 'Pause'; run = newRun(); camX = -3; record(0); }
 
 function sparkle(x, y, color, n, speed){
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) n = Math.min(n, 4);
@@ -535,9 +558,7 @@ function safe(fn){
   try { fn(); } catch(e){ $('err').textContent = friendly(e); $('err').classList.add('show'); api.say('Your special code has a bug. Check Build.'); }
 }
 function runCode(){
-  const src = $('code').value.replace(/[“”„″]/g, '"').replace(/[‘’‚′]/g, "'");
-  if (src !== $('code').value) $('code').value = src;
-  store.set('dgs-code', src);
+  const src = currentSource();
   freshGame();
   let okRun = true;
   try {
@@ -705,6 +726,12 @@ function draw(){
   });
   cx.globalAlpha = 1;
   // overlays
+  if (mode === 'paused'){
+    cx.fillStyle = 'rgba(19,33,58,.55)'; cx.fillRect(0, 0, Wpx, Hpx);
+    cx.textAlign = 'center'; cx.fillStyle = '#fff';
+    cx.font = `800 ${Math.round(Math.min(56, Wpx / 12))}px "Baloo 2",sans-serif`; cx.fillText('Paused', Wpx / 2, Hpx * .42);
+    cx.font = `700 ${Math.round(Math.min(26, Wpx / 26))}px "Baloo 2",sans-serif`; cx.fillText('Tap to keep playing', Wpx / 2, Hpx * .42 + 48);
+  }
   if (mode === 'ready' || mode === 'won'){
     cx.fillStyle = 'rgba(19,33,58,.45)'; cx.fillRect(0, 0, Wpx, Hpx);
     cx.textAlign = 'center'; cx.fillStyle = '#fff';
@@ -752,8 +779,15 @@ function frame(t){
 }
 
 // ---------- Input ----------
+function setPaused(p){
+  if (p && mode === 'playing'){ mode = 'paused'; held = false; stopMusic(); }
+  else if (!p && mode === 'paused'){ mode = 'playing'; last = performance.now(); if (game.music !== false && musicOn) restartMusic(); }
+  $('pauseBtn').textContent = mode === 'paused' ? 'Resume' : 'Pause';
+}
+$('pauseBtn').onclick = () => setPaused(mode !== 'paused');
 function press(){
   audio();
+  if (mode === 'paused'){ setPaused(false); return; }
   if (mode === 'ready' || mode === 'won'){ if (mode === 'won') fullRestart(); startAttempt(); held = true; return; }
   held = true; if (run) run.pressBuf = .15;
 }
@@ -763,6 +797,7 @@ cv.addEventListener('pointerup', release); cv.addEventListener('pointercancel', 
 addEventListener('keydown', e => {
   if ($('play').hidden || /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName) || document.activeElement?.isContentEditable) return;
   if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW'){ e.preventDefault(); if (!e.repeat) press(); }
+  if ((e.code === 'KeyP' || e.code === 'Escape') && !e.repeat) setPaused(mode !== 'paused');
 });
 addEventListener('keyup', e => { if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') release(); });
 $('practice').onclick = () => {
@@ -890,7 +925,7 @@ $('mStarter').onclick = () => twice($('mStarter'), 'Starter beat', () => { music
 // ---------- Tabs and code buttons ----------
 function show(view){
   ['play', 'build', 'music'].forEach(v => { $(v).hidden = v !== view; $('tab-' + v).setAttribute('aria-selected', v === view); });
-  if (view !== 'play' && mode === 'playing'){ mode = 'ready'; run = newRun(); if (view === 'build') stopMusic(); }
+  if (view !== 'play' && mode === 'playing') setPaused(true);
 }
 ['play', 'build', 'music'].forEach(v => $('tab-' + v).onclick = () => show(v));
 $('run').onclick = () => { if (runCode()) setTimeout(() => show('play'), 500); };
@@ -1019,7 +1054,7 @@ $('pics').addEventListener('click', e => {
 function saveMsg(ok, err){ $('saveOk').textContent = ok || ''; $('saveErr').textContent = err || ''; $('saveErr').classList.toggle('show', !!err); }
 $('saveGame').onclick = () => {
   store.set('dgs-code', $('code').value);
-  const data = { app: 'dash-game-studio', version: 1, savedAt: new Date().toISOString(), code: $('code').value, images, music, best };
+  const data = { app: 'dash-game-studio', version: 1, savedAt: new Date().toISOString(), code: $('code').value, images, music, best, blocks: savedBlocks(), mode: BK.mode };
   const slug = (String(game.name || 'my-game').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'my-game');
   const file = slug + '.json';
   if (window.self !== window.top){ saveMsg('', "Downloads don't work in this preview. Open the game from your class link to download."); return; }
@@ -1050,6 +1085,9 @@ $('noOpen').onclick = () => { pendingGame = null; $('confirmOpen').hidden = true
 $('yesOpen').onclick = () => {
   const d = pendingGame; if (!d) return; pendingGame = null; $('confirmOpen').hidden = true;
   $('code').value = d.code;
+  if (d.blocks){ store.set(KEYP + 'blocks', JSON.stringify(d.blocks)); if (BK.ws){ BK.ws.clear(); try { Blockly.serialization.workspaces.load(d.blocks, BK.ws); } catch(e){} } }
+  if (d.mode === 'blocks' || d.mode === 'code') setMode(d.mode);
+  if (BK.mode === 'blocks') ensureBlockly().then(ok => { if (ok) runCode(); });
   if (d.images && typeof d.images === 'object') images = Object.assign({}, d.images);
   if (d.music && Array.isArray(d.music.grid) && d.music.grid.length === ROWS.length){ stopMusic(); music = d.music; }
   if (d.best && typeof d.best === 'object') best = Object.assign({}, best, d.best);
@@ -1085,8 +1123,208 @@ window.__dashSolve = function(maxNodes){
 
 // ---------- Start ----------
 renderGrid(); renderPics();
+
+// ---------- Blocks mode (Blockly) ----------
+// Blocks turn into the exact same commands as typed code, then run through runCode().
+const KEYP = 'dgs-';
+const BK = { mode: store.get(KEYP + 'mode') || 'blocks', ws: null, loading: null, defined: false };
+const q = s => JSON.stringify(String(s ?? ''));
+const ORD = () => (window.javascript && window.javascript.Order) || { ATOMIC: 0, FUNCTION_CALL: 2, ADDITION: 6.2, NONE: 99 };
+const GEN = () => Blockly.JavaScript;
+const COLORS = [['🟥 red', '#ff3b30'], ['🟧 orange', '#ff9500'], ['🟨 gold', '#ffd23f'], ['🟩 green', '#34c759'], ['🌊 teal', '#2ec4b6'],
+  ['🩵 sky blue', '#5ec8ff'], ['🟦 blue', '#2f6bff'], ['🟪 purple', '#8f6bff'], ['🩷 pink', '#ff4f8b'], ['🟫 brown', '#8b5a2b'],
+  ['⬜ white', '#ffffff'], ['⬛ black', '#13213a'], ['🍑 peach', '#ffe9c7'], ['🌙 night', '#1b1440']];
+const SOUNDS_LIST = [['pop', 'pop'], ['coin', 'coin'], ['laser', 'laser'], ['boing', 'boing'], ['kick drum', 'kick'], ['snare', 'snare'], ['clap', 'clap'], ['hi-hat', 'hat']];
+
+function loadScript(src){
+  return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => { s.remove(); rej(); }; document.head.appendChild(s); });
+}
+function ensureBlockly(){
+  if (BK.defined) return Promise.resolve(true);
+  if (!BK.loading){
+    BK.loading = (window.Blockly && window.Blockly.JavaScript ? Promise.resolve() :
+      loadScript('vendor/blockly-13.4.0.min.js').catch(() => loadScript('https://cdn.jsdelivr.net/npm/blockly@13.4.0/blockly.min.js')))
+      .then(() => { defineAllBlocks(); BK.defined = true; return true; })
+      .catch(() => false);
+  }
+  return BK.loading;
+}
+function def(type, json, gen, after){
+  Blockly.Blocks[type] = { init(){ this.jsonInit(json); if (after) after(this); } };
+  GEN().forBlock[type] = gen;
+}
+function defineAllBlocks(){
+  def('x_color', { message0: '%1', args0: [{ type: 'field_dropdown', name: 'C', options: COLORS }], output: 'String', colour: 0, tooltip: 'A color' },
+    b => [q(b.getFieldValue('C')), ORD().ATOMIC]);
+  def('x_say', { message0: 'say %1', args0: [{ type: 'input_value', name: 'V' }], previousStatement: null, nextStatement: null, colour: 330, tooltip: 'Show a message' },
+    b => `say(${GEN().valueToCode(b, 'V', ORD().NONE) || '""'});\n`);
+  def('x_sound', { message0: 'play sound %1', args0: [{ type: 'field_dropdown', name: 'S', options: SOUNDS_LIST }], previousStatement: null, nextStatement: null, colour: 330 },
+    b => `playSound(${q(b.getFieldValue('S'))});\n`);
+  def('x_chance', { message0: '%1 out of 100 chance', args0: [{ type: 'field_number', name: 'N', value: 10, min: 0, max: 100 }], output: 'Boolean', colour: 260, tooltip: 'True some of the time' },
+    b => [`randomChance(${Number(b.getFieldValue('N'))})`, ORD().FUNCTION_CALL]);
+  def('x_random', { message0: 'random number %1 to %2', args0: [{ type: 'field_number', name: 'A', value: 1 }, { type: 'field_number', name: 'B', value: 6 }], output: 'Number', colour: 260 },
+    b => [`randomNumber(${Number(b.getFieldValue('A'))}, ${Number(b.getFieldValue('B'))})`, ORD().FUNCTION_CALL]);
+  defineGameBlocks();
+}
+const SH = { text: t => ({ shadow: { type: 'text', fields: { TEXT: t } } }), num: n => ({ shadow: { type: 'math_number', fields: { NUM: n } } }), color: c => ({ shadow: { type: 'x_color', fields: { C: c } } }) };
+function chain(list){ for (let i = list.length - 2; i >= 0; i--) list[i].next = { block: list[i + 1] }; return list[0]; }
+
+function savedBlocks(){
+  if (BK.ws) return Blockly.serialization.workspaces.save(BK.ws);
+  return readJSON(KEYP + 'blocks', null) || STARTER_BLOCKS();
+}
+function blocksToCode(){
+  if (!BK.defined) return store.get(KEYP + 'gen') || EXAMPLE_FALLBACK;
+  let code;
+  if (BK.ws) code = GEN().workspaceToCode(BK.ws);
+  else {
+    const ws = new Blockly.Workspace();
+    try { Blockly.serialization.workspaces.load(savedBlocks(), ws); code = GEN().workspaceToCode(ws); }
+    catch(e){ console.warn('Blocks could not load:', e); code = store.get(KEYP + 'gen') || EXAMPLE_FALLBACK; }
+    finally { ws.dispose(); }
+  }
+  store.set(KEYP + 'gen', code);
+  return code;
+}
+function showBlocksUI(){
+  if (!BK.defined || $('blocksArea').hidden) return;
+  if (BK.ws){ Blockly.svgResize(BK.ws); return; }
+  const theme = Blockly.Theme.defineTheme('studio-' + KEYP, { base: Blockly.Themes.Classic, fontStyle: BLOCK_FONT,
+    componentStyles: { workspaceBackgroundColour: '#f6f9ff', toolboxBackgroundColour: '#13213a', toolboxForegroundColour: '#ffffff', flyoutBackgroundColour: '#e8eefb', flyoutOpacity: 1, scrollbarColour: '#9aa7c7' } });
+  const fromStarter = !readJSON(KEYP + 'blocks', null);
+  const initial = savedBlocks();
+  BK.ws = Blockly.inject('blocklyDiv', { toolbox: TOOLBOX, trashcan: true, sounds: false, renderer: 'zelos', theme,
+    zoom: { controls: true, wheel: false, pinch: true, startScale: .72, maxScale: 1.6, minScale: .35 }, move: { scrollbars: true, drag: true, wheel: true } });
+  try { Blockly.serialization.workspaces.load(initial, BK.ws); }
+  catch(e){ Blockly.serialization.workspaces.load(STARTER_BLOCKS(), BK.ws); }
+  if (fromStarter && KEYP === 'dgs-') BK.ws.cleanUp();
+  BK.ws.addChangeListener(e => {
+    if (e.isUiEvent) return;
+    store.set(KEYP + 'blocks', JSON.stringify(Blockly.serialization.workspaces.save(BK.ws)));
+    if (!$('genCode').hidden) $('genCode').textContent = blocksToCode();
+  });
+}
+function setMode(m){
+  BK.mode = m; store.set(KEYP + 'mode', m);
+  $('modeBlocks').setAttribute('aria-pressed', m === 'blocks'); $('modeCode').setAttribute('aria-pressed', m === 'code');
+  $('codeArea').hidden = m !== 'code'; $('blocksArea').hidden = m !== 'blocks';
+  if ($('pickCard')) $('pickCard').hidden = m !== 'code';
+  if (m === 'blocks'){
+    $('blockMsg').textContent = BK.defined ? '' : 'Loading blocks…';
+    ensureBlockly().then(ok => {
+      if (!ok){ $('blockMsg').textContent = "Blocks couldn't load on this network. Use Code mode for now."; return; }
+      $('blockMsg').textContent = '';
+      showBlocksUI();
+    });
+  }
+}
+$('modeBlocks').onclick = () => setMode('blocks');
+$('modeCode').onclick = () => setMode('code');
+$('tab-build').addEventListener('click', () => setTimeout(showBlocksUI, 0));
+addEventListener('resize', () => { if (BK.ws && !$('blocksArea').hidden) Blockly.svgResize(BK.ws); });
+$('showGen').onclick = () => {
+  const pre = $('genCode'); pre.hidden = !pre.hidden;
+  $('showGen').textContent = pre.hidden ? 'Show my code' : 'Hide my code';
+  if (!pre.hidden) pre.textContent = blocksToCode();
+};
+$('toCode').onclick = () => twice($('toCode'), 'Turn my blocks into code', () => {
+  $('code').value = blocksToCode(); store.set(KEYP + 'code', $('code').value);
+  setMode('code'); runCode();
+  $('ok').textContent = 'Your blocks are now code! You can switch back to Blocks anytime; your blocks are saved.';
+});
+$('example').onclick = () => twice($('example'), 'Start over with example', () => {
+  if (BK.mode === 'blocks'){
+    store.set(KEYP + 'blocks', JSON.stringify(STARTER_BLOCKS()));
+    if (BK.ws){ BK.ws.clear(); Blockly.serialization.workspaces.load(STARTER_BLOCKS(), BK.ws); if (KEYP === 'dgs-') BK.ws.cleanUp(); BK.ws.scrollCenter(); }
+  } else $('code').value = EXAMPLE_FALLBACK;
+  runCode();
+});
+function currentSource(){
+  if (BK.mode === 'blocks') return blocksToCode();
+  const raw = $('code').value, src = raw.replace(/[“”„″]/g, '"').replace(/[‘’‚′]/g, "'");
+  if (src !== raw) $('code').value = src;
+  store.set(KEYP + 'code', src);
+  return src;
+}
+
+const EXAMPLE_FALLBACK = EXAMPLE_CODE;
+const BLOCK_FONT = { family: 'ui-monospace, Menlo, "SF Mono", Consolas, monospace', weight: '700', size: 12 };
+const STARTER_ROWS = ["                                                                                    ====================", "                                              C                                            v    vv   G", "                             C                                                               C", "                                                           O", "      t  t    ^     ^^     ####           J ^^^^      L   ^^^^  *   >   ^    ^^   P   G                     F", "==================================  ============================================================================"];
+const TILE_TYPES = [['solid', 'solid'], ['deadly', 'deadly'], ['coin', 'coin'], ['bounce', 'bounce'], ['decoration', 'decoration']];
+function defineGameBlocks(){
+  const S = { previousStatement: null, nextStatement: null };
+  const set = (type, msg, prop, field, colour, tip) => def(type, Object.assign({ message0: msg, args0: [field], colour, tooltip: tip || '' }, S),
+    b => `game.${prop} = ${field.type === 'field_number' ? Number(b.getFieldValue('V')) : field.type === 'field_checkbox' ? (b.getFieldValue('V') === 'TRUE') : q(b.getFieldValue('V'))};\n`);
+  set('d_name', 'game name %1', 'name', { type: 'field_input', name: 'V', text: 'Egg Dash' }, 45);
+  set('d_player', 'player looks like %1', 'player', { type: 'field_input', name: 'V', text: '🥚' }, 45, 'An emoji, a picture name, or a color name');
+  set('d_speed', 'speed %1 squares a second', 'speed', { type: 'field_number', name: 'V', value: 8, min: 1, max: 30 }, 45);
+  set('d_jump', 'jump height %1 squares', 'jumpHeight', { type: 'field_number', name: 'V', value: 2.2, min: .3, max: 8, precision: .1 }, 45);
+  set('d_gravity', 'gravity %1', 'gravity', { type: 'field_number', name: 'V', value: 1, min: .2, max: 4, precision: .1 }, 45);
+  set('d_music', 'play music %1', 'music', { type: 'field_checkbox', name: 'V', checked: true }, 45);
+  def('d_color', Object.assign({ message0: 'color of %1 is %2', args0: [{ type: 'field_dropdown', name: 'P', options: [['sky top', 'sky'], ['sky bottom', 'sky2'], ['ground', 'groundColor'], ['block', 'blockColor'], ['spike', 'spikeColor'], ['trail', 'trail'], ['crash splat', 'crashColor']] }, { type: 'input_value', name: 'V' }], colour: 45 }, S),
+    b => `game.${b.getFieldValue('P')} = ${GEN().valueToCode(b, 'V', ORD().NONE) || '"white"'};\n`);
+  def('d_tile', Object.assign({ message0: 'new tile %1 looks like %2 is %3', args0: [{ type: 'field_input', name: 'L', text: 'L' }, { type: 'field_input', name: 'LOOK', text: '🔥' }, { type: 'field_dropdown', name: 'T', options: TILE_TYPES }], colour: 20, tooltip: 'Make your own level letter' }, S),
+    b => `addTile(${q(String(b.getFieldValue('L')).slice(0, 1) || 'L')}, ${q(b.getFieldValue('LOOK'))}, ${q(b.getFieldValue('T'))});\n`);
+  def('d_level', Object.assign({ message0: 'level %1 %2', args0: [{ type: 'input_dummy' }, { type: 'input_statement', name: 'ROWS', check: 'Row' }], colour: 120, tooltip: 'Each row is one line of your level. The bottom row is the ground.' }, S),
+    b => {
+      const rows = []; let r = b.getInputTargetBlock('ROWS');
+      while (r){ rows.push(String(r.getFieldValue('ROW') || '').replace(/[`\\$]/g, '')); r = r.getNextBlock(); }
+      return `level(\`\n${rows.join('\n')}\n\`);\n`;
+    });
+  def('d_row', { message0: 'row %1', args0: [{ type: 'field_input', name: 'ROW', text: '    ^    ' }], previousStatement: 'Row', nextStatement: 'Row', colour: 120 }, () => '', blk => { const fld = blk.getField('ROW'); if (fld) fld.maxDisplayLength = 400; });
+  const ev = (type, msg, fn) => def(type, { message0: msg + ' %1 %2', args0: [{ type: 'input_dummy' }, { type: 'input_statement', name: 'DO' }], colour: 210 },
+    b => `${fn}(function() {\n${GEN().statementToCode(b, 'DO')}});\n`);
+  ev('d_when_jump', 'when I jump', 'whenJump');
+  ev('d_when_crash', 'when I crash', 'whenCrash');
+  ev('d_when_coin', 'when I get a coin', 'whenCoin');
+  ev('d_when_finish', 'when I finish', 'whenFinish');
+  ev('d_every_second', 'every second', 'everySecond');
+  def('d_set_speed', Object.assign({ message0: 'set speed to %1', args0: [{ type: 'input_value', name: 'V', check: 'Number' }], colour: 330 }, S),
+    b => `game.speed = ${GEN().valueToCode(b, 'V', ORD().NONE) || 8};\n`);
+  def('d_change_speed', Object.assign({ message0: 'change speed by %1', args0: [{ type: 'input_value', name: 'V', check: 'Number' }], colour: 330 }, S),
+    b => `game.speed = game.speed + (${GEN().valueToCode(b, 'V', ORD().NONE) || 1});\n`);
+  def('d_set_player', Object.assign({ message0: 'change player to %1', args0: [{ type: 'field_input', name: 'V', text: '🐣' }], colour: 330 }, S),
+    b => `game.player = ${q(b.getFieldValue('V'))};\n`);
+  def('d_coins', { message0: 'my coins', output: 'Number', colour: 260 }, () => ['getCoins()', ORD().FUNCTION_CALL]);
+  def('d_attempts', { message0: 'my attempts', output: 'Number', colour: 260 }, () => ['getAttempts()', ORD().FUNCTION_CALL]);
+  def('d_progress', { message0: 'my progress %', output: 'Number', colour: 260 }, () => ['getProgress()', ORD().FUNCTION_CALL]);
+}
+const TOOLBOX = { kind: 'categoryToolbox', contents: [
+  { kind: 'category', name: 'Game', colour: '45', contents: ['d_name', 'd_player', 'd_speed', 'd_jump', 'd_gravity', 'd_music'].map(t => ({ kind: 'block', type: t }))
+    .concat([{ kind: 'block', type: 'd_color', inputs: { V: SH.color('#5ec8ff') } }]) },
+  { kind: 'category', name: 'Tiles', colour: '20', contents: [{ kind: 'block', type: 'd_tile' }] },
+  { kind: 'category', name: 'Level', colour: '120', contents: [
+    { kind: 'block', type: 'd_level', inputs: { ROWS: { block: chain([{ type: 'd_row', fields: { ROW: '' } }, { type: 'd_row', fields: { ROW: '       ^      ^^      F' } }, { type: 'd_row', fields: { ROW: '========================' } }]) } } },
+    { kind: 'block', type: 'd_row' }] },
+  { kind: 'category', name: 'Events', colour: '210', contents: ['d_when_jump', 'd_when_crash', 'd_when_coin', 'd_when_finish', 'd_every_second'].map(t => ({ kind: 'block', type: t })) },
+  { kind: 'category', name: 'Actions', colour: '330', contents: [
+    { kind: 'block', type: 'x_say', inputs: { V: SH.text('Nice!') } }, { kind: 'block', type: 'x_sound' },
+    { kind: 'block', type: 'd_set_speed', inputs: { V: SH.num(8) } }, { kind: 'block', type: 'd_change_speed', inputs: { V: SH.num(1) } }, { kind: 'block', type: 'd_set_player' }] },
+  { kind: 'category', name: 'Logic', colour: '210', contents: [{ kind: 'block', type: 'controls_if' }, { kind: 'block', type: 'logic_compare' }, { kind: 'block', type: 'logic_operation' }, { kind: 'block', type: 'x_chance' }] },
+  { kind: 'category', name: 'Numbers', colour: '260', contents: [{ kind: 'block', type: 'math_number' }, { kind: 'block', type: 'math_arithmetic' },
+    { kind: 'block', type: 'd_coins' }, { kind: 'block', type: 'd_attempts' }, { kind: 'block', type: 'd_progress' }, { kind: 'block', type: 'x_random' }] },
+  { kind: 'category', name: 'Words', colour: '160', contents: [{ kind: 'block', type: 'text' }, { kind: 'block', type: 'text_join' }, { kind: 'block', type: 'x_color' }] }
+] };
+function STARTER_BLOCKS(){
+  const B = (type, fields, inputs) => ({ type, fields, inputs });
+  const setup = chain([
+    B('d_name', { V: 'Egg Dash' }), B('d_player', { V: '🥚' }), B('d_speed', { V: 8 }), B('d_jump', { V: 2.2 }), B('d_gravity', { V: 1 }),
+    B('d_color', { P: 'sky' }, { V: SH.color('#5ec8ff') }), B('d_color', { P: 'groundColor' }, { V: SH.color('#8f6bff') }), B('d_color', { P: 'crashColor' }, { V: SH.color('#ffd23f') }),
+    B('d_tile', { L: 'L', LOOK: '🔥', T: 'deadly' }), B('d_tile', { L: '*', LOOK: '⭐', T: 'coin' }), B('d_tile', { L: 't', LOOK: '🌳', T: 'decoration' }),
+    B('d_level', {}, { ROWS: { block: chain(STARTER_ROWS.map(r => B('d_row', { ROW: r }))) } })
+  ]);
+  const coin = B('d_when_coin', {}, { DO: { block: chain([B('x_say', {}, { V: SH.text('Shiny!') }), B('x_sound', { S: 'coin' })]) } });
+  const crash = B('d_when_crash', {}, { DO: { block: B('controls_if', {}, {
+    IF0: { block: B('logic_compare', { OP: 'EQ' }, { A: { block: B('d_attempts') }, B: { block: B('math_number', { NUM: 10 }) } }) },
+    DO0: { block: B('x_say', {}, { V: SH.text("Attempt 10! Don't give up!") }) } }) } });
+  const fin = B('d_when_finish', {}, { DO: { block: B('x_say', {}, { V: SH.text('You did it!') }) } });
+  return { blocks: { languageVersion: 0, blocks: [Object.assign(setup, { x: 20, y: 20 }), Object.assign(coin, { x: 20, y: 820 }), Object.assign(crash, { x: 340, y: 820 }), Object.assign(fin, { x: 800, y: 820 })] } };
+}
+
 $('code').value = store.get('dgs-code') || EXAMPLE_CODE;
+setMode(BK.mode);
 runCode();
+if (BK.mode === 'blocks') ensureBlockly().then(ok => { if (ok) runCode(); });
 requestAnimationFrame(frame);
 // ---------- Color picker that writes the code for you ----------
 {
