@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clicker Game Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+/* VOICE: playful, loud, toy-like — a game kids are proud they made
+   IDEA: a toy arcade machine: chunky housing, one giant button, a marquee
+   PICTURE: the student's own clicker, huge, inside the machine's screen
+   COLOUR and TYPE: sunny yellow field, deep ink, coral accent, teal support; Baloo 2 + JetBrains Mono for code
+   LAYOUT: game first; shop and prizes beside it (stack on iPad portrait); Build tab = editor + pictures + cheat sheet */
+:root{color-scheme:light dark;
+ --bg:light-dark(#ffd23f,#1b1440);--ink:light-dark(#1b1b3a,#fff6d8);
+ --card:light-dark(#fffdf4,#2a2160);--line:light-dark(#1b1b3a,#0c0826);
+ --coral:#ff5a5f;--teal:#2ec4b6;--muted:light-dark(#5b5a78,#c9c2ef);
+ --code-bg:light-dark(#1b1b3a,#0e0a26);--code-ink:#fff6d8}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.5 "Baloo 2",ui-rounded,system-ui,sans-serif;overflow-x:clip}
+button,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer;touch-action:manipulation}
+:focus-visible{outline:3px solid var(--coral);outline-offset:3px}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:16px max(4vw,16px) 0;max-width:1240px;margin:auto}
+header h1{margin:0;font-size:32px;line-height:1.05;font-weight:800}
+.tabs{display:flex;gap:8px}
+.tab{min-height:48px;padding:0 22px;border:3px solid var(--line);border-radius:14px;background:var(--card);font-weight:700;box-shadow:0 4px 0 var(--line)}
+.tab[aria-selected=true]{background:var(--coral);color:#fff}
+main{max-width:1240px;margin:auto;padding:16px max(4vw,16px) 40px}
+.card{background:var(--card);border:3px solid var(--line);border-radius:22px;box-shadow:0 6px 0 var(--line);padding:18px}
+h2{margin:0 0 8px;font-size:24px;line-height:1.1}
+.play{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:20px;align-items:start}
+.machine{padding:0;overflow:hidden}
+.marquee{background:var(--line);color:#fff6d8;text-align:center;padding:10px 16px;font-size:28px;font-weight:800;line-height:1.1;text-wrap:balance}
+.screen{--g-bg:#ffe9c7;--g-accent:#ff8a3d;--g-ink:#3b2412;background:var(--g-bg);color:var(--g-ink);padding:18px 16px 22px;text-align:center;position:relative}
+.score{font-size:clamp(40px,7vw,56px);font-weight:800;line-height:1}
+.unit{font-size:20px;font-weight:700}
+.rates{display:flex;justify-content:center;flex-wrap:wrap;gap:8px 18px;font-weight:700;margin:6px 0 10px;opacity:.85}
+.clicker{width:min(72vw,300px);aspect-ratio:1;border-radius:50%;border:0;background:radial-gradient(circle at 35% 30%,#fff9,transparent 60%),var(--g-accent);box-shadow:0 10px 0 #0003,inset 0 -10px 0 #0002;display:grid;place-items:center;padding:14%;margin:0 auto;transition:transform .08s}
+.clicker:active,.clicker.pop{transform:scale(.93)}
+.clicker span{font-size:clamp(90px,20vw,150px);line-height:1}
+.clicker{grid-template:minmax(0,1fr)/minmax(0,1fr)}
+.clicker img{width:100%;height:100%;min-height:0;object-fit:contain;pointer-events:none}
+.msg{min-height:32px;margin-top:14px;font-weight:700;font-size:20px}
+.side{display:grid;gap:20px}
+.shop{display:grid;gap:10px}
+.item{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:10px;align-items:center;text-align:left;width:100%;min-height:64px;padding:8px 12px;border:3px solid var(--line);border-radius:16px;background:var(--card);box-shadow:0 4px 0 var(--line)}
+.item:disabled{opacity:.45;cursor:not-allowed;box-shadow:none;transform:translateY(4px)}
+.ic{width:52px;height:52px;display:grid;place-items:center;font-size:36px;line-height:1}
+.ic img{width:100%;height:100%;object-fit:contain}
+.item b{display:block;line-height:1.15}
+.item small{color:var(--muted);font-size:14px}
+.cost{font-weight:800;white-space:nowrap;text-align:right}
+.cost small{display:block;font-weight:500}
+.prizes{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:10px}
+.prize{border:3px dashed var(--muted);border-radius:16px;padding:8px;text-align:center;font-size:14px;line-height:1.2}
+.prize .ic{margin:auto}
+.prize.got{border:3px solid var(--line);background:var(--teal);color:#0c1c33}
+.empty{color:var(--muted);font-size:15px;margin:0;grid-column:1/-1}
+.float{position:fixed;pointer-events:none;font-weight:800;font-size:26px;color:var(--g-ink,#000);text-shadow:0 2px 0 #fff;animation:up .9s ease-out forwards;z-index:9}
+@keyframes up{to{transform:translateY(-80px);opacity:0}}
+.toast{position:fixed;left:50%;top:18px;transform:translate(-50%,-160%);background:var(--card);border:3px solid var(--line);border-radius:18px;box-shadow:0 6px 0 var(--line);padding:10px 20px;font-weight:800;font-size:20px;display:flex;gap:10px;align-items:center;transition:transform .35s cubic-bezier(.3,1.6,.5,1);z-index:10;max-width:92vw}
+.toast.show{transform:translate(-50%,0)}
+.toast .ic{width:44px;height:44px;font-size:32px}
+.build{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:20px;align-items:start}
+textarea{width:100%;min-height:520px;resize:vertical;background:var(--code-bg);color:var(--code-ink);border:3px solid var(--line);border-radius:16px;padding:14px;font:15px/1.6 "JetBrains Mono",ui-monospace,monospace;tab-size:2}
+.row{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
+.btn{min-height:48px;padding:0 18px;border:3px solid var(--line);border-radius:14px;background:var(--card);font-weight:700;box-shadow:0 4px 0 var(--line)}
+.btn.go{background:var(--teal);color:#0c1c33}
+.btn:disabled{opacity:.45;cursor:not-allowed;box-shadow:none;transform:translateY(4px)}
+.btn:active{transform:translateY(3px);box-shadow:0 1px 0 var(--line)}
+.err{display:none;margin-top:12px;padding:12px 14px;border-radius:14px;background:var(--coral);color:#fff;font-weight:700}
+.err.show{display:block}
+.ok{color:var(--muted);font-size:15px;margin:8px 0 0}
+.field{display:grid;gap:6px;margin-bottom:10px;font-weight:700;font-size:15px}
+.field input[type=text]{min-height:48px;border:3px solid var(--line);border-radius:12px;padding:0 12px;background:var(--card);font-size:17px}
+.field input[type=file]{font-size:15px}
+.pics{display:grid;gap:8px;margin-top:12px}
+.pic{display:grid;grid-template-columns:52px minmax(0,1fr);gap:10px;align-items:center}
+.pic img{width:52px;height:52px;object-fit:contain;border:2px solid var(--line);border-radius:10px;background:#fff}
+code,.cheat dt{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:14px;overflow-wrap:anywhere}
+.pic code{background:var(--code-bg);color:var(--code-ink);padding:2px 6px;border-radius:6px}
+.cheat dl{margin:0}
+.cheat dt{background:var(--code-bg);color:var(--code-ink);padding:6px 10px;border-radius:10px;margin-top:10px}
+.cheat dd{margin:4px 0 0 4px;font-size:15px;color:var(--muted)}
+.pt{position:fixed;left:0;top:0;pointer-events:none;z-index:8;font-size:28px;line-height:1;animation:burst var(--t,.8s) cubic-bezier(.2,.7,.4,1) forwards}
+.pt img{width:34px;height:34px;object-fit:contain;display:block}
+.pt.conf{width:10px;height:14px;border-radius:2px}
+.pt.bub{width:22px;height:22px;border-radius:50%;border:3px solid currentColor;background:#ffffff55}
+.pt.ring{width:70px;height:70px;border-radius:50%;border:6px solid currentColor;animation-name:ring}
+@keyframes burst{from{transform:translate(var(--x),var(--y)) translate(-50%,-50%) scale(1)}to{transform:translate(var(--x),var(--y)) translate(-50%,-50%) translate(var(--dx),var(--dy)) rotate(var(--r)) scale(.4);opacity:0}}
+@keyframes ring{from{transform:translate(var(--x),var(--y)) translate(-50%,-50%) scale(.3);opacity:1}to{transform:translate(var(--x),var(--y)) translate(-50%,-50%) scale(3.2);opacity:0}}
+.shake{animation:shake .25s}
+@keyframes shake{25%{transform:translate(-7px,3px)}50%{transform:translate(6px,-4px)}75%{transform:translate(-3px,2px)}}
+.mini{min-height:44px;padding:0 16px;border:3px solid currentColor;border-radius:12px;background:#ffffff66;font-weight:700;color:inherit;margin-top:6px}
+.mhead{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.mhead h2{margin:0 auto 0 0}
+.ctl{display:flex;gap:8px;align-items:center;font-weight:700;font-size:15px}
+.ctl select{min-height:48px;border:3px solid var(--line);border-radius:12px;background:var(--card);padding:0 10px;font-size:16px}
+input[type=range]{accent-color:var(--coral);width:130px}
+.ctl output{min-width:3ch;font-variant-numeric:tabular-nums}
+.hint{color:var(--muted);margin:10px 0 12px;font-size:15px}
+.scroll{overflow-x:auto;padding-bottom:6px}
+.grid{display:grid;grid-template-columns:64px repeat(16,minmax(30px,1fr));gap:4px;min-width:620px}
+.grid .lab{font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:flex-end;padding-right:6px;white-space:nowrap}
+.grid .num{text-align:center;font-size:13px;color:var(--muted)}
+.grid .gap{grid-column:1/-1;height:4px}
+.cell{aspect-ratio:1;min-height:30px;border:2px solid var(--line);border-radius:8px;background:var(--card);padding:0;transition:transform .08s}
+.cell.alt{background:light-dark(#efe8cc,#3a2f7a)}
+.cell[aria-pressed=true]{background:var(--c)}
+.cell.now{box-shadow:0 0 0 3px var(--coral)}
+.cell.now[aria-pressed=true]{transform:scale(1.12)}
+.mel{--c:var(--teal)}.bass{--c:#8f6bff}.drum{--c:var(--coral)}
+.num.now{color:var(--coral);font-weight:800}
+.bonus{--rc:#3ddc84;position:absolute;left:0;top:0;width:60px;height:60px;margin:-30px 0 0 -30px;border:0;background:none;padding:0;font-size:42px;line-height:1;z-index:3;filter:drop-shadow(0 0 5px var(--rc)) drop-shadow(0 0 12px var(--rc));transition:left .6s cubic-bezier(.2,1.4,.5,1),top .6s cubic-bezier(.2,1.4,.5,1),opacity .4s}
+.bonus::before{content:"";position:absolute;inset:-16px;border-radius:50%;background:radial-gradient(circle,var(--rc) 0,transparent 68%);opacity:.75;z-index:-1}
+.bonus>span,.bonus>img{display:block;width:100%;height:100%;object-fit:contain;animation:bob .9s ease-in-out infinite alternate}
+.bonus em{position:absolute;left:50%;top:100%;transform:translate(-50%,4px);font-style:normal;font-size:13px;font-weight:800;line-height:1.5;background:var(--rc);color:#1b1b3a;border-radius:999px;padding:0 8px;white-space:nowrap}
+.r-rare{--rc:#3a86ff}.r-epic{--rc:#b05cff}.r-legendary{--rc:#ffc400}
+.r-legendary::before{inset:-26px;background:repeating-conic-gradient(var(--rc) 0 10deg,transparent 10deg 30deg);-webkit-mask:radial-gradient(circle,#000 25%,transparent 70%);mask:radial-gradient(circle,#000 25%,transparent 70%);animation:spin 4s linear infinite}
+@keyframes spin{to{transform:rotate(1turn)}}
+.pt.tiny{animation-name:arc;animation-timing-function:linear;font-size:30px}
+.pt.tiny img{width:38px;height:38px}
+@keyframes arc{0%{transform:translate(var(--x),var(--y)) translate(-50%,-50%) scale(.5)}35%{transform:translate(var(--x),var(--y)) translate(-50%,-50%) translate(calc(var(--dx) * .45),var(--up)) rotate(calc(var(--r) * .35)) scale(1)}100%{transform:translate(var(--x),var(--y)) translate(-50%,-50%) translate(var(--dx),var(--dy)) rotate(var(--r)) scale(.9);opacity:0}}
+.toast.r-rare{background:#cfe0ff;color:#1b1b3a}.toast.r-epic{background:#ead5ff;color:#1b1b3a}.toast.r-legendary{background:#ffe680;color:#1b1b3a}
+@keyframes bob{to{transform:translateY(-8px) rotate(8deg)}}
+.bonus.fade{opacity:.25}
+.boost{background:var(--coral);color:#fff;border-radius:999px;padding:0 10px}
+.rbInfo{margin:0 0 10px;font-size:16px}
+@media(prefers-reduced-motion:reduce){.bonus>span,.bonus>img,.r-legendary::before{animation:none}}
+.hand{position:absolute;left:0;top:0;font-size:52px;line-height:1;pointer-events:none;z-index:2;transform:translate(-50%,-50%) rotate(-25deg);filter:drop-shadow(0 4px 0 #0003)}
+.hand img{width:56px;height:56px;object-fit:contain;display:block}
+.hand.tap{animation:tap .16s ease-in-out}
+@keyframes tap{50%{transform:translate(-50%,-50%) rotate(-25deg) translate(-4px,-14px) scale(.9)}}
+.paste{min-height:48px;border:3px dashed var(--muted);border-radius:12px;padding:10px 12px;margin-bottom:12px;color:var(--muted);font-size:15px;overflow:hidden;max-height:48px}
+.editor{margin-bottom:12px}
+.editor canvas{width:100%;max-width:300px;display:block;margin:0 auto;border:3px solid var(--line);border-radius:12px;background:repeating-conic-gradient(#d9d9d9 0 25%,#fff 0 50%) 0 0/20px 20px;touch-action:manipulation;cursor:crosshair}
+.filebtn{display:inline-flex;align-items:center;position:relative;overflow:hidden}
+.filebtn input{position:absolute;inset:0;opacity:0;cursor:pointer;font-size:0}
+.filebtn:focus-within{outline:3px solid var(--coral);outline-offset:3px}
+[hidden]{display:none!important}
+@media(max-width:820px){.play,.build{grid-template-columns:minmax(0,1fr)}textarea{min-height:420px}}
+@media(prefers-reduced-motion:reduce){.float{animation:none;opacity:0}.toast{transition:none}.clicker{transition:none}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Clicker Game Studio</h1>
+  <nav class="tabs" role="tablist">
+    <button class="tab" id="tab-play" role="tab" aria-selected="true">Play</button>
+    <button class="tab" id="tab-build" role="tab" aria-selected="false">Build</button>
+    <button class="tab" id="tab-music" role="tab" aria-selected="false">Music</button>
+  </nav>
+</header>
+
+<main>
+  <section id="play" class="play">
+    <div class="card machine">
+      <div class="marquee" id="gameName">My Clicker Game</div>
+      <div class="screen" id="screen">
+        <div class="score" id="score">0</div>
+        <div class="unit" id="unit">points</div>
+        <div class="rates"><span id="perClick">1 per click</span><span id="perSec">0 per second</span><span id="boost" class="boost" hidden></span></div>
+        <button class="clicker" id="clicker" aria-label="Click me"></button>
+        <div class="hand" id="hand" hidden></div>
+        <div class="msg" id="msg" aria-live="polite"></div>
+        <button class="mini" id="musicToggle">Music: off</button>
+      </div>
+    </div>
+    <div class="side">
+      <div class="card"><h2>Shop</h2><div class="shop" id="shop"></div></div>
+      <div class="card" id="rbCard"><h2>Rebirth</h2><p class="rbInfo" id="rbInfo"></p><button class="btn go" id="rebirth"></button></div>
+      <div class="card"><h2>Prizes</h2><div class="prizes" id="prizes"></div></div>
+    </div>
+  </section>
+
+  <section id="build" class="build" hidden>
+    <div class="card">
+      <h2>Your game code</h2>
+      <textarea id="code" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off" aria-label="Game code"></textarea>
+      <div class="row">
+        <button class="btn go" id="run">Run my code</button>
+        <button class="btn" id="resetScore">Reset score</button>
+        <button class="btn" id="example">Start over with example</button>
+      </div>
+      <div class="err" id="err" role="alert"></div>
+      <p class="ok" id="ok"></p>
+    </div>
+    <div class="side">
+      <div class="card">
+        <h2>Save and open</h2>
+        <p class="hint" style="margin-top:0">Download a file of your whole game: code, pictures, music and score. Open it later to keep going.</p>
+        <div class="row" style="margin-top:0">
+          <button class="btn go" id="saveGame">Download my game</button>
+          <label class="btn filebtn">Open a game file<input type="file" id="openGame" accept=".json,application/json,text/plain"></label>
+        </div>
+        <div class="row" id="confirmOpen" hidden>
+          <button class="btn go" id="yesOpen">Yes, open it</button>
+          <button class="btn" id="noOpen">Cancel</button>
+        </div>
+        <div class="err" id="saveErr"></div>
+        <p class="ok" id="saveOk"></p>
+      </div>
+      <div class="card">
+        <h2>Your pictures</h2>
+        <label class="field">1. Choose a picture <input type="file" id="file" accept="image/*"></label>
+        <div class="paste" id="pasteBox" contenteditable="true" role="textbox" aria-label="Paste a picture here">…or press and hold here, then tap Paste</div>
+        <div class="editor" id="editor" hidden>
+          <canvas id="ecan" aria-label="Your picture. Tap a spot to erase that color."></canvas>
+          <p class="hint">Tap the background to erase it. Tap more spots to erase more. Checkers mean see-through.</p>
+          <div class="row">
+            <button class="btn go" id="autoBg">Remove background</button>
+            <button class="btn" id="undoBg">Undo</button>
+            <button class="btn" id="resetBg">Start over</button>
+          </div>
+          <label class="ctl" style="margin-top:12px">Eraser strength <input type="range" id="tol" min="10" max="140" step="5" value="45"></label>
+        </div>
+        <label class="field">2. Give it a short name <input type="text" id="picName" placeholder="like: dog" autocapitalize="off" autocorrect="off"></label>
+        <button class="btn go" id="addPic">Add picture</button>
+        <div class="err" id="picErr"></div>
+        <div class="pics" id="pics"></div>
+      </div>
+      <div class="card cheat">
+        <h2>Code cheat sheet</h2>
+        <dl>
+          <dt>game.clicker = "🐶";</dt><dd>What you click. An emoji, or a picture name like "dog".</dd>
+          <dt>game.background = "lightblue";</dt><dd>Screen color. Also try game.buttonColor and game.textColor.</dd>
+          <dt>addUpgrade("Name", "🦴", 25, { perClick: 1 });</dt><dd>Something to buy. Cost 25. Use perClick or perSecond.</dd>
+          <dt>addPrize("Name", "🏆", 100);</dt><dd>Unlocks after earning 100 points total.</dd>
+          <dt>whenClicked(function() { ... });</dt><dd>Code that runs every time you click.</dd>
+          <dt>everySecond(function() { ... });</dt><dd>Code that runs once every second.</dd>
+          <dt>say("Hi!");</dt><dd>Shows a message under the button.</dd>
+          <dt>addPoints(10);</dt><dd>Gives points. Use a minus number to take them away.</dd>
+          <dt>randomChance(20)</dt><dd>True about 20 out of 100 times. Great for surprises.</dd>
+          <dt>randomNumber(1, 6)</dt><dd>A random whole number from 1 to 6.</dd>
+          <dt>getPoints()</dt><dd>How many points you have right now.</dd>
+          <dt>owns("Name")</dt><dd>How many of an upgrade you've bought.</dd>
+          <dt>game.clickEffect = "confetti";</dt><dd>What bursts out when you click: "sparkles", "confetti", "stars", "hearts", "bubbles", "ring", "clicker", "none" — or any emoji or picture name!</dd>
+          <dt>game.effectAmount = 12;</dt><dd>How many pieces burst out.</dd>
+          <dt>game.shake = true;</dt><dd>The game shakes when you click.</dd>
+          <dt>game.clickSound = "coin";</dt><dd>Sound for each click: "pop", "coin", "laser", "boing", "kick", "snare", "clap", "hat" or "none".</dd>
+          <dt>game.miniClickers = 3;</dt><dd>How many little copies of your clicker pop out each click. 0 turns them off.</dd>
+          <dt>addBonus("Lightning", "rare", { multiplier: 3, seconds: 10 });</dt><dd>A glowing special that sometimes pops out. Tap it before it fades! Rarity can be "common", "rare", "epic" or "legendary". It can give { points: 50 }, a power-up with multiplier + seconds, or a secret prize with { prize: "Name" }. Add icon: "⚡" to use a different picture.</dd>
+          <dt>addBonus("Robot Hand", "epic", { autoClick: 60 });</dt><dd>A special that clicks for you for 60 seconds. Add clicksPerSecond: 8 to make it faster (starts at 5).</dd>
+          <dt>autoClick(60, 5);</dt><dd>Turn on the auto-clicker from your own code: 60 seconds, 5 clicks a second.</dd>
+          <dt>game.autoIcon = "🤖";</dt><dd>The picture that does the auto-clicking. Starts as 👆.</dd>
+          <dt>addPrize("Crown", "👑", "secret");</dt><dd>A secret prize you can only get from a special.</dd>
+          <dt>game.chances.legendary = 1;</dt><dd>Chance out of 100 for each click. Starts at common 5, rare 2, epic 0.7, legendary 0.2.</dd>
+          <dt>game.bonusTime = 6;</dt><dd>How many seconds a special stays before it disappears.</dd>
+          <dt>unlockPrize("Crown");</dt><dd>Give a prize right now from your own code.</dd>
+          <dt>game.rebirthCost = 5000;</dt><dd>Points needed to rebirth: start over, but everything earns more. Doubles each time. Use 0 to turn rebirths off.</dd>
+          <dt>game.rebirthBonus = 1;</dt><dd>Each rebirth adds this much: 1 means x2, then x3, then x4...</dd>
+          <dt>whenRebirth(function() { ... });</dt><dd>Code that runs after a rebirth. getRebirths() tells you how many.</dd>
+          <dt>effect("ring");</dt><dd>Make an effect happen right now (great inside whenClicked).</dd>
+          <dt>playSound("laser");</dt><dd>Play a sound right now.</dd>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  <section id="music" hidden>
+    <div class="card">
+      <div class="mhead">
+        <h2>Make a soundtrack</h2>
+        <button class="btn go" id="mPlay">Play</button>
+        <label class="ctl">Speed <input type="range" id="tempo" min="60" max="180" step="5"> <output id="tempoOut">110</output></label>
+        <label class="ctl">Melody <select id="voice"><option value="bell">Bell</option><option value="chip">Video game</option><option value="soft">Soft</option></select></label>
+        <button class="btn" id="mStarter">Starter beat</button>
+        <button class="btn" id="mClear">Clear</button>
+      </div>
+      <p class="hint">Tap squares to turn sounds on. The grid plays left to right, then loops forever — and keeps playing while you play your game.</p>
+      <div class="scroll"><div class="grid" id="grid"></div></div>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast" aria-live="polite"></div>
+
+<script>
+{
+const $ = id => document.getElementById(id);
+const store = {
+  get(k){ try { return localStorage.getItem(k); } catch(e){ return null; } },
+  set(k,v){ try { localStorage.setItem(k,v); return true; } catch(e){ return false; } }
+};
+const readJSON = (k, d) => { try { return JSON.parse(store.get(k)) || d; } catch(e){ return d; } };
+
+const EXAMPLE = `// ===== MY CLICKER GAME =====
+// Change things below, then tap "Run my code"!
+
+// 1. Name your game
+game.name = "Cookie Clicker";
+game.pointsName = "cookies";
+
+// 2. What do you click? An emoji or a picture name
+game.clicker = "🍪";
+
+// 3. Colors
+game.background = "#ffe9c7";
+game.buttonColor = "#ff8a3d";
+
+// 4. Points for each click
+game.pointsPerClick = 1;
+
+// 5. Click effects and sounds (see the cheat sheet for more)
+game.clickEffect = "sparkles";
+game.effectAmount = 10;
+game.clickSound = "pop";
+game.shake = false;
+game.miniClickers = 3;   // little cookies that pop out
+
+// 6. The shop: addUpgrade(name, icon, cost, what it does)
+addUpgrade("Sprinkles", "✨", 15, { perClick: 1 });
+addUpgrade("Grandma Baker", "👵", 50, { perSecond: 1 });
+addUpgrade("Cookie Factory", "🏭", 400, { perSecond: 8 });
+addUpgrade("Rocket Oven", "🚀", 2000, { perSecond: 40 });
+
+// 7. Prizes: addPrize(name, icon, points needed)
+addPrize("First Bite", "🥇", 10);
+addPrize("Snack Time", "🥛", 100);
+addPrize("Cookie Monster", "👾", 1000);
+addPrize("Cookie Legend", "👑", 10000);
+
+// 8. Special code: runs every click
+whenClicked(function() {
+  if (randomChance(5)) {
+    say("Golden cookie! +25");
+    addPoints(25);
+    effect("confetti");
+    playSound("coin");
+  }
+});
+
+// 9. Special code: runs every second
+everySecond(function() {
+  if (owns("Grandma Baker") >= 5) {
+    say("The grandmas are singing!");
+  }
+});
+
+// 10. Glowing specials! Sometimes one pops out. Tap it fast!
+// addBonus(name, rarity, what it gives)
+// Rarities: "common", "rare", "epic", "legendary"
+addBonus("Lucky Cookie", "common", { points: 25 });
+addBonus("Lightning Oven", "rare", { multiplier: 3, seconds: 10 });
+addBonus("Cookie Storm", "epic", { multiplier: 10, seconds: 5 });
+addBonus("Robot Hand", "epic", { autoClick: 60 });   // clicks for you for 1 minute!
+addBonus("Golden Crown", "legendary", { prize: "Golden Crown", points: 1000 });
+addPrize("Golden Crown", "👑", "secret");
+
+// How rare? Chance out of 100 on each click
+game.chances.legendary = 0.2;
+
+// 11. Rebirth: start over, but stronger!
+game.rebirthCost = 5000;
+game.rebirthBonus = 1;
+
+whenRebirth(function() {
+  say("Reborn! You are now level " + getRebirths());
+});
+`;
+
+let images = readJSON('cgs-images', {});
+let state = readJSON('cgs-state', { points: 0, total: 0, owned: {}, prizes: {} });
+let game, upgrades, prizes, clickFns, secondFns, bonuses, rebirthFns, boosts = [], bugShown = 0;
+state.rebirths = state.rebirths || 0;
+
+function freshGame(){
+  game = { name: "My Clicker Game", pointsName: "points", clicker: "🍪", pointsPerClick: 1,
+           background: "#ffe9c7", buttonColor: "#ff8a3d", textColor: "#3b2412", sound: true, costGrowth: 1.15,
+           clickEffect: "sparkles", effectAmount: 10, shake: false, clickSound: "pop", showNumbers: true,
+           rebirthCost: 10000, rebirthBonus: 1, bonusTime: 6, miniClickers: 3, autoIcon: '👆',
+           chances: { common: 5, rare: 2, epic: 0.7, legendary: 0.2 } };
+  upgrades = []; prizes = []; clickFns = []; secondFns = []; bonuses = []; rebirthFns = [];
+}
+
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt = n => Math.floor(n).toLocaleString();
+function icon(v){
+  const key = String(v ?? '').trim().toLowerCase();
+  if (images[key]) return `<img src="${images[key]}" alt="${esc(v)}">`;
+  return `<span>${esc(v ?? '')}</span>`;
+}
+
+// ---------- Commands students can use ----------
+const api = {
+  addUpgrade(name, ic, cost, effect){
+    effect = effect || {};
+    upgrades.push({ name: String(name), icon: ic, cost: Number(cost) || 1,
+      perClick: Number(effect.perClick) || 0, perSecond: Number(effect.perSecond) || 0 });
+  },
+  addPrize(name, ic, goal){ const g = Number(goal); prizes.push({ name: String(name), icon: ic, goal: goal !== '' && isFinite(g) ? g : null }); },
+  unlockPrize(name){ unlockPrize(name); },
+  whenClicked(fn){ if (typeof fn === 'function') clickFns.push(fn); },
+  everySecond(fn){ if (typeof fn === 'function') secondFns.push(fn); },
+  say(text){ showMsg(text); },
+  addPoints(n){ n = Number(n) || 0; state.points = Math.max(0, state.points + n); if (n > 0) state.total += n; },
+  getPoints(){ return Math.floor(state.points); },
+  randomChance(pct){ return Math.random() * 100 < pct; },
+  randomNumber(a, b){ a = Math.ceil(a); b = Math.floor(b); return a + Math.floor(Math.random() * (b - a + 1)); },
+  owns(name){ return state.owned[name] || 0; },
+  effect(type, amount){ const p = lastXY || clickerCenter(); burst(type || game.clickEffect, p.x, p.y, amount || 24); },
+  playSound(name){ sfx(name); },
+  addBonus(name, a, b, c){
+    let rarity = String(a).toLowerCase(), effect = b, ic, chance = null;
+    if (!RARITIES.includes(rarity)){ ic = a; chance = Number(b) || 0; effect = c; rarity = 'common'; }
+    effect = effect || {};
+    bonuses.push({ name: String(name), rarity, chance, icon: effect.icon ?? ic, points: Number(effect.points) || 0,
+      multiplier: Number(effect.multiplier) || 0, seconds: Number(effect.seconds) || 10, prize: effect.prize,
+      autoClick: Number(effect.autoClick) || 0, cps: Number(effect.clicksPerSecond) || 5 });
+  },
+  autoClick(seconds, speed){ startAuto(seconds, speed); },
+  whenRebirth(fn){ if (typeof fn === 'function') rebirthFns.push(fn); },
+  getRebirths(){ return state.rebirths || 0; }
+};
+
+const costOf = u => Math.ceil(u.cost * Math.pow(game.costGrowth || 1.15, api.owns(u.name)));
+const rebirthMult = () => 1 + state.rebirths * (Number(game.rebirthBonus) || 0);
+const activeBoosts = () => boosts.filter(b => b.until > Date.now());
+const mult = () => rebirthMult() * activeBoosts().reduce((m, b) => m * b.mult, 1);
+const perClick = () => ((Number(game.pointsPerClick) || 0) + upgrades.reduce((s, u) => s + u.perClick * api.owns(u.name), 0)) * mult();
+const perSecond = () => upgrades.reduce((s, u) => s + u.perSecond * api.owns(u.name), 0) * mult();
+const rebirthCost = () => Math.ceil((Number(game.rebirthCost) || 0) * Math.pow(2, state.rebirths));
+
+function friendly(e){
+  const m = e && e.message ? e.message : String(e);
+  let hint = "Check your spelling, quotes, commas and ( ) { } pairs.";
+  if (/is not defined|Can't find variable/i.test(m)) hint = "A word isn't a command the game knows. Check the spelling and capital letters (like addUpgrade, not addupgrade).";
+  else if (/Unexpected end|missing \)|missing }|Unexpected EOF/i.test(m)) hint = "Something got opened but not closed. Every ( needs a ) and every { needs a }.";
+  else if (/string|quote|Unterminated|Unexpected identifier/i.test(m)) hint = "Words need quotes on both sides, and items in a list need commas between them.";
+  return `Oops! ${hint} (Computer says: ${m})`;
+}
+
+function runCode(){
+  const src = $('code').value.replace(/[“”„″]/g, '"').replace(/[‘’‚′]/g, "'");
+  if (src !== $('code').value) $('code').value = src;
+  store.set('cgs-code', src);
+  freshGame();
+  try {
+    const names = Object.keys(api);
+    new Function('game', ...names, src)(game, ...names.map(n => api[n]));
+    $('err').classList.remove('show');
+    $('ok').textContent = `Code ran! ${upgrades.length} upgrades, ${prizes.length} prizes.`;
+    return true;
+  } catch(e){
+    $('err').textContent = friendly(e); $('err').classList.add('show'); $('ok').textContent = '';
+    return false;
+  } finally { renderAll(); }
+}
+
+function safe(fn){
+  try { fn(); } catch(e){
+    $('err').textContent = friendly(e); $('err').classList.add('show');
+    if (Date.now() - bugShown > 5000){ bugShown = Date.now(); showMsg("Your special code has a bug. Check the Build tab."); }
+  }
+}
+
+// ---------- Drawing ----------
+function renderAll(){
+  document.title = game.name || 'Clicker Game Studio';
+  $('gameName').textContent = game.name;
+  const sc = $('screen').style;
+  sc.setProperty('--g-bg', game.background); sc.setProperty('--g-accent', game.buttonColor); sc.setProperty('--g-ink', game.textColor);
+  $('clicker').innerHTML = icon(game.clicker);
+  $('shop').innerHTML = upgrades.length ? upgrades.map((u, i) => `
+    <button class="item" data-i="${i}">
+      <span class="ic">${icon(u.icon)}</span>
+      <span><b>${esc(u.name)}</b><small>${[u.perClick && `+${fmt(u.perClick)} per click`, u.perSecond && `+${fmt(u.perSecond)} per second`].filter(Boolean).join(', ') || 'Does nothing yet'}</small></span>
+      <span class="cost"><span class="c"></span><small class="o"></small></span>
+    </button>`).join('') : '<p class="empty">No upgrades yet. Add one with addUpgrade in the Build tab.</p>';
+  renderPrizes(); update();
+}
+
+function renderPrizes(){
+  $('prizes').innerHTML = prizes.length ? prizes.map(p => state.prizes[p.name]
+    ? `<div class="prize got"><div class="ic">${icon(p.icon)}</div><b>${esc(p.name)}</b></div>`
+    : `<div class="prize"><div class="ic"><span>?</span></div>${p.goal === null ? 'Secret' : fmt(p.goal) + ' ' + esc(game.pointsName)}</div>`).join('')
+    : '<p class="empty">No prizes yet. Add one with addPrize in the Build tab.</p>';
+}
+
+function update(){
+  $('score').textContent = fmt(state.points);
+  $('unit').textContent = game.pointsName;
+  $('perClick').textContent = `${fmt(perClick())} per click`;
+  $('perSec').textContent = `${fmt(perSecond())} per second`;
+  document.querySelectorAll('#shop .item').forEach(b => {
+    const u = upgrades[b.dataset.i], c = costOf(u);
+    b.disabled = state.points < c;
+    b.querySelector('.c').textContent = fmt(c);
+    b.querySelector('.o').textContent = `own ${api.owns(u.name)}`;
+  });
+  const ab = activeBoosts(), bx = $('boost'), autoLeft = Math.ceil((auto.until - Date.now()) / 1000);
+  const parts = ab.map(b => `x${b.mult} for ${Math.ceil((b.until - Date.now()) / 1000)}s`);
+  if (autoLeft > 0) parts.push(`Auto-click ${autoLeft}s`);
+  bx.hidden = !parts.length;
+  if (parts.length) bx.textContent = parts.join(' + ');
+  const rc = rebirthCost(), rb = $('rebirth');
+  $('rbCard').hidden = !rc;
+  if (rc){
+    $('rbInfo').textContent = state.rebirths
+      ? `Rebirths: ${state.rebirths}. Everything earns x${fmt(rebirthMult())}.`
+      : `Start over with 0 ${game.pointsName}, but earn more forever. You keep your prizes.`;
+    rb.disabled = state.points < rc;
+    if (!rb.dataset.sure) rb.textContent = `Rebirth for x${fmt(1 + (state.rebirths + 1) * (Number(game.rebirthBonus) || 0))} (needs ${fmt(rc)})`;
+  }
+}
+
+// ---------- Rebirth ----------
+$('rebirth').onclick = () => {
+  const rb = $('rebirth');
+  if (state.points < rebirthCost()) return;
+  if (!rb.dataset.sure){
+    rb.dataset.sure = 1; rb.textContent = 'Tap again to start over stronger!';
+    setTimeout(() => delete rb.dataset.sure, 3000); return;
+  }
+  delete rb.dataset.sure;
+  state.points = 0; state.owned = {}; state.rebirths++;
+  boosts = []; stopAuto(); document.querySelectorAll('.bonus').forEach(b => b.remove());
+  const c = clickerCenter();
+  burst('ring', c.x, c.y); burst('confetti', c.x, c.y, 50); prizeTune();
+  toast(`Rebirth ${state.rebirths}! Everything earns x${fmt(rebirthMult())}`);
+  rebirthFns.forEach(fn => safe(fn));
+  save(); renderAll();
+};
+
+// ---------- Mini clickers and glowing specials ----------
+const RARITIES = ['common', 'rare', 'epic', 'legendary'];
+const RARITY_LABEL = { common: 'Common', rare: 'Rare', epic: 'Epic', legendary: 'Legendary' };
+function minis(x, y, n){
+  n = Math.max(0, Math.min(12, Math.round(Number(n) || 0)));
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) n = Math.min(n, 1);
+  for (let i = 0; i < n; i++){
+    const el = part('tiny', x, y, (Math.random() - .5) * 220, 150 + Math.random() * 120, { html: icon(game.clicker) });
+    el.style.setProperty('--up', -(70 + Math.random() * 90) + 'px');
+  }
+}
+function spawnBonus(b){
+  const scr = $('screen'), sr = scr.getBoundingClientRect(), c = clickerCenter();
+  const el = document.createElement('button');
+  el.className = 'bonus r-' + b.rarity;
+  el.innerHTML = icon(b.icon ?? game.clicker) + `<em>${RARITY_LABEL[b.rarity]}</em>`;
+  el.setAttribute('aria-label', `${RARITY_LABEL[b.rarity]} special: ${b.name}`);
+  const sx = c.x - sr.left, sy = c.y - sr.top;
+  el.style.left = sx + 'px'; el.style.top = sy + 'px';
+  scr.appendChild(el);
+  const a = Math.random() * Math.PI * 2, d = 120 + Math.random() * 60;
+  const tx = Math.max(40, Math.min(sr.width - 40, sx + Math.cos(a) * d));
+  const ty = Math.max(40, Math.min(sr.height - 50, sy + Math.sin(a) * d));
+  requestAnimationFrame(() => requestAnimationFrame(() => { el.style.left = tx + 'px'; el.style.top = ty + 'px'; }));
+  sfx(b.rarity === 'legendary' ? 'laser' : 'boing');
+  if (b.rarity === 'legendary') say(`A legendary ${b.name} appeared!`);
+  const life = Math.max(1, Number(game.bonusTime) || 6) * 1000;
+  setTimeout(() => el.classList.add('fade'), life - 1200);
+  setTimeout(() => el.remove(), life);
+  el.onclick = () => {
+    const r = el.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+    el.remove();
+    let text = `${RARITY_LABEL[b.rarity]}! ${b.name}`;
+    if (b.points){ const p = Math.ceil(b.points * mult()); api.addPoints(p); text += ` +${fmt(p)}`; }
+    if (b.autoClick){ startAuto(b.autoClick, b.cps); text += ` Auto-click for ${b.autoClick}s`; }
+    if (b.multiplier > 1){ boosts.push({ mult: b.multiplier, until: Date.now() + b.seconds * 1000 }); text += ` x${b.multiplier} for ${b.seconds}s`; }
+    toast(`<span class="ic">${icon(b.icon ?? game.clicker)}</span> ${esc(text)}`, b.rarity);
+    const big = RARITIES.indexOf(b.rarity);
+    burst('ring', x, y); burst(big >= 2 ? 'confetti' : 'stars', x, y, 12 + big * 12);
+    if (big >= 2) prizeTune(); else sfx('coin');
+    if (b.prize) setTimeout(() => unlockPrize(b.prize), big >= 2 ? 1400 : 0);
+    checkPrizes(); update();
+  };
+}
+function say(t){ showMsg(t); }
+function maybeBonus(){
+  if (!bonuses.length || document.querySelectorAll('.bonus').length >= 3) return;
+  const ch = Object.assign({ common: 5, rare: 2, epic: 0.7, legendary: 0.2 }, game.chances);
+  for (const r of [...RARITIES].reverse()){
+    const pool = bonuses.filter(b => b.rarity === r && b.chance === null);
+    if (pool.length && api.randomChance(Number(ch[r]) || 0)){ spawnBonus(pool[Math.floor(Math.random() * pool.length)]); return; }
+  }
+  for (const b of bonuses) if (b.chance !== null && api.randomChance(b.chance)){ spawnBonus(b); return; }
+}
+function unlockPrize(name){
+  const p = prizes.find(p => p.name === String(name));
+  if (!p){ showMsg(`No prize called "${name}". Add it with addPrize.`); return; }
+  if (state.prizes[p.name]) return;
+  state.prizes[p.name] = true;
+  toast(`<span class="ic">${icon(p.icon)}</span> Prize unlocked: ${esc(p.name)}!`);
+  prizeTune();
+  const c = clickerCenter(); burst('confetti', c.x, c.y, 40);
+  renderPrizes();
+}
+
+function checkPrizes(){
+  prizes.forEach(p => {
+    if (p.goal !== null && !state.prizes[p.name] && state.total >= p.goal) unlockPrize(p.name);
+  });
+}
+
+let msgT; function showMsg(t){ $('msg').textContent = t; clearTimeout(msgT); msgT = setTimeout(() => $('msg').textContent = '', 2500); }
+let toastT; function toast(html, rarity){ const t = $('toast'); t.innerHTML = html; t.className = 'toast show' + (rarity ? ' r-' + rarity : ''); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2600); }
+
+// ---------- Click effects ----------
+let lastXY = null;
+function clickerCenter(){ const r = $('clicker').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }
+const CONFETTI = ['#ff5a5f', '#2ec4b6', '#ffd23f', '#8f6bff', '#3a86ff', '#ff9f1c'];
+const PRESETS = { sparkles: '✨', stars: '⭐', hearts: '💖' };
+function part(cls, x, y, dx, dy, opts){
+  const el = document.createElement('div');
+  el.className = 'pt ' + cls;
+  const s = el.style;
+  s.setProperty('--x', x + 'px'); s.setProperty('--y', y + 'px');
+  s.setProperty('--dx', dx + 'px'); s.setProperty('--dy', dy + 'px');
+  s.setProperty('--r', (Math.random() * 360 - 180) + 'deg');
+  s.setProperty('--t', (.6 + Math.random() * .45) + 's');
+  if (opts.html) el.innerHTML = opts.html;
+  if (opts.bg) s.background = opts.bg;
+  if (opts.color) s.color = opts.color;
+  if (opts.size) s.fontSize = opts.size + 'px';
+  document.body.appendChild(el);
+  el.addEventListener('animationend', () => el.remove());
+  setTimeout(() => el.remove(), 1600);
+  return el;
+}
+function burst(type, x, y, n){
+  type = String(type ?? 'sparkles').trim();
+  if (!type || type === 'none') return;
+  n = Math.max(1, Math.min(60, Number(n) || 10));
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) n = Math.min(n, 3);
+  if (document.querySelectorAll('.pt').length > 160) return;
+  const key = type.toLowerCase();
+  if (key === 'ring'){ part('ring', x, y, 0, 0, { color: game.buttonColor }); return; }
+  for (let i = 0; i < n; i++){
+    const a = Math.random() * Math.PI * 2, d = 50 + Math.random() * 100;
+    let dx = Math.cos(a) * d, dy = Math.sin(a) * d;
+    if (key === 'confetti') part('conf', x, y, dx, dy + 90, { bg: CONFETTI[i % CONFETTI.length] });
+    else if (key === 'bubbles') part('bub', x, y, (Math.random() - .5) * 90, -(80 + Math.random() * 130), { color: game.buttonColor });
+    else {
+      const ic = key === 'clicker' ? game.clicker : (PRESETS[key] || type);
+      part('', x, y, dx, dy, { html: icon(ic), size: 18 + Math.random() * 18 });
+    }
+  }
+}
+
+// ---------- Sound engine (all sounds are made with code, no files) ----------
+let ac, master, noiseBuf;
+function audio(){
+  try {
+    if (!ac){
+      ac = new (window.AudioContext || window.webkitAudioContext)();
+      master = ac.createGain(); master.gain.value = .6; master.connect(ac.destination);
+      noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+      const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    if (ac.state === 'suspended') ac.resume();
+    return true;
+  } catch(e){ return false; }
+}
+function env(node, t, peak, dur){
+  const g = ac.createGain();
+  g.gain.setValueAtTime(peak, t); g.gain.exponentialRampToValueAtTime(.001, t + dur);
+  node.connect(g); g.connect(master);
+}
+function osc(type, f, t, dur, peak, fEnd){
+  const o = ac.createOscillator(); o.type = type;
+  o.frequency.setValueAtTime(f, t);
+  if (fEnd) o.frequency.exponentialRampToValueAtTime(fEnd, t + dur);
+  env(o, t, peak, dur); o.start(t); o.stop(t + dur + .03);
+}
+function noise(t, dur, peak, ftype, freq){
+  const s = ac.createBufferSource(); s.buffer = noiseBuf;
+  const fl = ac.createBiquadFilter(); fl.type = ftype; fl.frequency.value = freq;
+  s.connect(fl); env(fl, t, peak, dur); s.start(t); s.stop(t + dur + .03);
+}
+const SOUNDS = {
+  kick: t => osc('sine', 150, t, .35, 1, 40),
+  snare: t => { noise(t, .18, .5, 'highpass', 1200); osc('triangle', 190, t, .1, .3); },
+  hat: t => noise(t, .05, .3, 'highpass', 7000),
+  clap: t => [0, .012, .026].forEach(d => noise(t + d, .09, .45, 'bandpass', 1500)),
+  bass: (t, f) => osc('triangle', f || 130.8, t, .3, .6),
+  bell: (t, f) => { osc('triangle', f, t, .45, .3); osc('sine', f * 2, t, .25, .07); },
+  chip: (t, f) => osc('square', f, t, .18, .1),
+  soft: (t, f) => osc('sine', f, t, .55, .35),
+  pop: t => osc('sine', 420 + Math.random() * 160, t, .09, .3, 900),
+  coin: t => { osc('square', 988, t, .08, .1); osc('square', 1319, t + .08, .3, .1); },
+  laser: t => osc('sawtooth', 1600, t, .22, .1, 180),
+  boing: t => osc('sine', 180, t, .35, .35, 620)
+};
+SOUNDS.drum = SOUNDS.kick;
+function sound(name, t, f){ const fn = SOUNDS[String(name).toLowerCase()]; if (fn && audio()) fn(t ?? ac.currentTime, f); }
+function sfx(name){ if (game.sound === false || !name || name === 'none') return; sound(name); }
+function prizeTune(){ if (game.sound === false || !audio()) return; [523, 659, 784, 1047].forEach((f, i) => sound('bell', ac.currentTime + i * .1, f)); }
+
+// ---------- Soundtrack grid ----------
+const STEPS = 16;
+const ROWS = [
+  { n: 'A', k: 'mel', f: 880 }, { n: 'G', k: 'mel', f: 784 }, { n: 'E', k: 'mel', f: 659.3 },
+  { n: 'D', k: 'mel', f: 587.3 }, { n: 'C', k: 'mel', f: 523.3 },
+  { n: 'Bass', k: 'bass', f: 130.8 },
+  { n: 'Clap', k: 'clap' }, { n: 'Snare', k: 'snare' }, { n: 'Hat', k: 'hat' }, { n: 'Kick', k: 'kick' }
+];
+const emptyGrid = () => ROWS.map(() => Array(STEPS).fill(0));
+let music = readJSON('cgs-music', null);
+if (!music || !Array.isArray(music.grid) || music.grid.length !== ROWS.length) music = { tempo: 110, voice: 'bell', grid: null };
+const STARTER = (() => {
+  const g = emptyGrid(), on = (row, steps) => steps.forEach(s => g[row][s] = 1);
+  on(9, [0, 4, 8, 12]); on(7, [4, 12]); on(8, [0, 2, 4, 6, 8, 10, 12, 14]);
+  on(5, [0, 3, 8, 11]); on(4, [0]); on(2, [2]); on(1, [4]); on(0, [6]); on(1, [8]); on(2, [10]); on(3, [12]); on(4, [14]);
+  return g;
+})();
+if (!music.grid) music.grid = STARTER.map(r => r.slice());
+const saveMusic = () => store.set('cgs-music', JSON.stringify(music));
+
+function playRow(i, t){
+  const r = ROWS[i];
+  if (r.k === 'mel') sound(music.voice, t, r.f);
+  else if (r.k === 'bass') sound('bass', t, r.f);
+  else sound(r.k, t);
+}
+function renderGrid(){
+  let h = '<div></div>' + Array.from({ length: STEPS }, (_, c) => `<div class="num" data-c="${c}">${c + 1}</div>`).join('');
+  ROWS.forEach((r, i) => {
+    if (i === 5 || i === 6) h += '<div class="gap"></div>';
+    const grp = r.k === 'mel' ? 'mel' : r.k === 'bass' ? 'bass' : 'drum';
+    h += `<div class="lab">${r.n}</div>` + music.grid[i].map((v, c) =>
+      `<button class="cell ${grp}${Math.floor(c / 4) % 2 ? ' alt' : ''}" data-r="${i}" data-c="${c}" aria-pressed="${!!v}" aria-label="${r.n}, beat ${c + 1}"></button>`).join('');
+  });
+  $('grid').innerHTML = h;
+}
+let playing = false, step = 0, nextT = 0, seqTimer, shown = -1;
+function markStep(s){
+  if (shown >= 0) document.querySelectorAll(`#grid [data-c="${shown}"]`).forEach(el => el.classList.remove('now'));
+  shown = s;
+  if (s >= 0) document.querySelectorAll(`#grid [data-c="${s}"]`).forEach(el => el.classList.add('now'));
+}
+function schedule(){
+  const dt = 60 / music.tempo / 4;
+  while (nextT < ac.currentTime + .12){
+    const s = step;
+    music.grid.forEach((row, i) => { if (row[s]) playRow(i, nextT); });
+    setTimeout(() => { if (playing) markStep(s); }, Math.max(0, (nextT - ac.currentTime) * 1000));
+    nextT += dt; step = (step + 1) % STEPS;
+  }
+}
+function syncMusicUI(){
+  $('mPlay').textContent = playing ? 'Stop' : 'Play';
+  $('musicToggle').textContent = playing ? 'Music: on' : 'Music: off';
+}
+function startMusic(){ if (playing || !audio()) return; playing = true; step = 0; nextT = ac.currentTime + .06; seqTimer = setInterval(schedule, 25); syncMusicUI(); }
+function stopMusic(){ playing = false; clearInterval(seqTimer); markStep(-1); syncMusicUI(); }
+const toggleMusic = () => playing ? stopMusic() : startMusic();
+
+$('mPlay').onclick = toggleMusic;
+$('musicToggle').onclick = toggleMusic;
+$('grid').addEventListener('click', e => {
+  const b = e.target.closest('.cell'); if (!b) return;
+  const r = +b.dataset.r, c = +b.dataset.c, on = music.grid[r][c] = music.grid[r][c] ? 0 : 1;
+  b.setAttribute('aria-pressed', !!on);
+  if (on && !playing && audio()) playRow(r, ac.currentTime);
+  saveMusic();
+});
+$('tempo').value = music.tempo; $('tempoOut').textContent = music.tempo;
+$('tempo').oninput = () => { music.tempo = +$('tempo').value; $('tempoOut').textContent = music.tempo; saveMusic(); };
+$('voice').value = music.voice;
+$('voice').onchange = () => { music.voice = $('voice').value; saveMusic(); if (audio()) sound(music.voice, ac.currentTime, 659.3); };
+function twice(btn, label, fn){
+  if (btn.dataset.sure){ delete btn.dataset.sure; btn.textContent = label; fn(); return; }
+  btn.dataset.sure = 1; btn.textContent = 'Tap again to be sure';
+  setTimeout(() => { delete btn.dataset.sure; btn.textContent = label; }, 3000);
+}
+$('mClear').onclick = () => twice($('mClear'), 'Clear', () => { music.grid = emptyGrid(); saveMusic(); renderGrid(); });
+$('mStarter').onclick = () => twice($('mStarter'), 'Starter beat', () => { music.grid = STARTER.map(r => r.slice()); saveMusic(); renderGrid(); });
+
+// ---------- Events ----------
+$('clicker').addEventListener('click', e => doClick(e.clientX, e.clientY, false));
+function doClick(px, py, isAuto){
+  const n = perClick(), c = clickerCenter();
+  lastXY = { x: px || c.x, y: py || c.y };
+  api.addPoints(n);
+  burst(game.clickEffect, lastXY.x, lastXY.y, isAuto ? Math.ceil((Number(game.effectAmount) || 10) / 3) : game.effectAmount);
+  minis(c.x, c.y, isAuto ? Math.min(1, Number(game.miniClickers) || 0) : game.miniClickers);
+  sfx(game.clickSound);
+  if (game.showNumbers !== false){
+    const f = document.createElement('div');
+    f.className = 'float'; f.textContent = `+${fmt(n)}`;
+    f.style.left = (lastXY.x - 20 + Math.random() * 30) + 'px';
+    f.style.top = (lastXY.y - 40) + 'px';
+    document.body.appendChild(f); setTimeout(() => f.remove(), 950);
+  }
+  $('clicker').classList.add('pop'); setTimeout(() => $('clicker').classList.remove('pop'), 80);
+  if (game.shake && !isAuto){ const m = $('screen').parentElement; m.classList.remove('shake'); void m.offsetWidth; m.classList.add('shake'); }
+  clickFns.forEach(fn => safe(fn));
+  maybeBonus();
+  checkPrizes(); update();
+}
+
+// ---------- Auto-clicker ----------
+const auto = { until: 0, speed: 5, acc: 0 };
+function startAuto(seconds, speed){
+  seconds = Math.max(1, Number(seconds) || 60);
+  auto.until = Math.max(auto.until, Date.now()) + seconds * 1000;
+  auto.speed = Math.max(1, Math.min(20, Number(speed) || 5));
+  $('hand').innerHTML = icon(game.autoIcon || '👆');
+  $('hand').hidden = false;
+}
+function stopAuto(){ auto.until = 0; auto.acc = 0; $('hand').hidden = true; }
+function autoTick(){
+  if (!auto.until) return;
+  if (Date.now() > auto.until){ stopAuto(); showMsg('The auto-clicker ran out!'); return; }
+  if ($('play').hidden) return;
+  const scr = $('screen').getBoundingClientRect(), r = $('clicker').getBoundingClientRect(), h = $('hand');
+  h.style.left = (r.left - scr.left + r.width * .82) + 'px';
+  h.style.top = (r.top - scr.top + r.height * .86) + 'px';
+  auto.acc += auto.speed / 10;
+  while (auto.acc >= 1){
+    auto.acc--;
+    doClick(r.left + r.width * (.35 + Math.random() * .3), r.top + r.height * (.35 + Math.random() * .3), true);
+    h.classList.remove('tap'); void h.offsetWidth; h.classList.add('tap');
+  }
+}
+
+$('shop').addEventListener('click', e => {
+  const b = e.target.closest('.item'); if (!b || b.disabled) return;
+  const u = upgrades[b.dataset.i], c = costOf(u);
+  if (state.points < c) return;
+  state.points -= c; state.owned[u.name] = api.owns(u.name) + 1;
+  sfx('coin'); update();
+});
+
+function show(view){
+  ['play', 'build', 'music'].forEach(v => {
+    $(v).hidden = v !== view;
+    $('tab-' + v).setAttribute('aria-selected', v === view);
+  });
+}
+['play', 'build', 'music'].forEach(v => $('tab-' + v).onclick = () => show(v));
+$('run').onclick = () => { if (runCode()) setTimeout(() => show('play'), 500); };
+$('resetScore').onclick = () => { state = { points: 0, total: 0, owned: {}, prizes: {}, rebirths: 0 }; boosts = []; stopAuto(); save(); renderAll(); $('ok').textContent = 'Score reset to 0.'; };
+$('example').onclick = () => twice($('example'), 'Start over with example', () => { $('code').value = EXAMPLE; runCode(); });
+$('code').addEventListener('input', () => store.set('cgs-code', $('code').value));
+$('code').addEventListener('keydown', e => {
+  if (e.key === 'Tab'){ e.preventDefault(); const t = e.target, s = t.selectionStart; t.setRangeText('  ', s, t.selectionEnd, 'end'); }
+});
+
+// ---------- Pictures ----------
+function renderPics(){
+  const keys = Object.keys(images);
+  $('pics').innerHTML = keys.length ? keys.map(k => `
+    <div class="pic"><img src="${images[k]}" alt=""><span>Use it as <code>"${esc(k)}"</code></span>
+    <span class="row" style="margin:0"><button class="btn" data-edit="${esc(k)}">Edit</button><button class="btn" data-del="${esc(k)}">Delete</button></span></div>`).join('') : '<p class="empty">No pictures yet.</p>';
+}
+function picErr(t){ $('picErr').textContent = t; $('picErr').classList.toggle('show', !!t); }
+// ---------- Picture editor: background eraser ----------
+const ec = $('ecan'), ex = ec.getContext('2d', { willReadFrequently: true });
+let edit = null;
+function loadIntoEditor(src, name){
+  const img = new Image();
+  img.onload = () => {
+    const max = 300, k = Math.min(1, max / Math.max(img.width, img.height));
+    ec.width = Math.max(1, Math.round(img.width * k)); ec.height = Math.max(1, Math.round(img.height * k));
+    ex.clearRect(0, 0, ec.width, ec.height);
+    ex.drawImage(img, 0, 0, ec.width, ec.height);
+    edit = { orig: ex.getImageData(0, 0, ec.width, ec.height), undo: [] };
+    $('editor').hidden = false; picErr('');
+    if (name) $('picName').value = name;
+  };
+  img.onerror = () => picErr("That file didn't open as a picture. Try a PNG or JPG.");
+  img.src = src;
+}
+function loadFile(file){
+  if (!file || !/^image\//.test(file.type)) return picErr("That isn't a picture.");
+  const reader = new FileReader();
+  reader.onload = () => loadIntoEditor(reader.result);
+  reader.readAsDataURL(file);
+}
+$('file').onchange = () => loadFile($('file').files[0]);
+$('pasteBox').addEventListener('paste', e => {
+  e.preventDefault();
+  const items = [...(e.clipboardData?.items || [])];
+  const it = items.find(i => i.type.startsWith('image/'));
+  if (it) loadFile(it.getAsFile()); else picErr('No picture found to paste. Copy a picture first.');
+  $('pasteBox').textContent = '…or press and hold here, then tap Paste';
+});
+$('pasteBox').addEventListener('input', () => { $('pasteBox').textContent = '…or press and hold here, then tap Paste'; });
+
+// Erase every connected pixel that is close in color to where each fill starts.
+function eraseFrom(seeds){
+  const W = ec.width, H = ec.height, id = ex.getImageData(0, 0, W, H), d = id.data;
+  const tol = +$('tol').value, t2 = tol * tol, seen = new Uint8Array(W * H);
+  edit.undo.push(ex.getImageData(0, 0, W, H)); if (edit.undo.length > 15) edit.undo.shift();
+  let erased = 0;
+  for (const s of seeds){
+    if (seen[s] || d[s * 4 + 3] === 0) continue;
+    const r0 = d[s * 4], g0 = d[s * 4 + 1], b0 = d[s * 4 + 2], stack = [s];
+    seen[s] = 1;
+    while (stack.length){
+      const p = stack.pop(), i = p * 4;
+      if (d[i + 3] !== 0){
+        const dr = d[i] - r0, dg = d[i + 1] - g0, db = d[i + 2] - b0;
+        if (dr * dr + dg * dg + db * db > t2) continue;
+        d[i + 3] = 0; erased++;
+      }
+      const x = p % W, y = (p - x) / W;
+      if (x > 0 && !seen[p - 1]){ seen[p - 1] = 1; stack.push(p - 1); }
+      if (x < W - 1 && !seen[p + 1]){ seen[p + 1] = 1; stack.push(p + 1); }
+      if (y > 0 && !seen[p - W]){ seen[p - W] = 1; stack.push(p - W); }
+      if (y < H - 1 && !seen[p + W]){ seen[p + W] = 1; stack.push(p + W); }
+    }
+  }
+  // soften the new edges a little
+  for (let p = 0; p < W * H; p++){
+    if (d[p * 4 + 3] !== 255) continue;
+    const x = p % W;
+    if ((x > 0 && d[(p - 1) * 4 + 3] === 0) || (x < W - 1 && d[(p + 1) * 4 + 3] === 0) ||
+        (p >= W && d[(p - W) * 4 + 3] === 0) || (p < W * (H - 1) && d[(p + W) * 4 + 3] === 0)) d[p * 4 + 3] = 170;
+  }
+  ex.putImageData(id, 0, 0);
+  if (!erased){ edit.undo.pop(); picErr('Nothing erased there. Try a stronger eraser.'); }
+  else if (erased > W * H * .92) picErr('That erased almost everything! Tap Undo and use a weaker eraser.');
+  else picErr('');
+}
+$('autoBg').onclick = () => {
+  if (!edit) return;
+  const W = ec.width, H = ec.height, seeds = [];
+  for (let x = 0; x < W; x++) seeds.push(x, (H - 1) * W + x);
+  for (let y = 0; y < H; y++) seeds.push(y * W, y * W + W - 1);
+  eraseFrom(seeds);
+};
+ec.addEventListener('click', e => {
+  if (!edit) return;
+  const r = ec.getBoundingClientRect();
+  const x = Math.floor((e.clientX - r.left - ec.clientLeft) / ec.clientWidth * ec.width);
+  const y = Math.floor((e.clientY - r.top - ec.clientTop) / ec.clientHeight * ec.height);
+  if (x < 0 || y < 0 || x >= ec.width || y >= ec.height) return;
+  eraseFrom([y * ec.width + x]);
+});
+$('undoBg').onclick = () => { if (edit && edit.undo.length) ex.putImageData(edit.undo.pop(), 0, 0); picErr(''); };
+$('resetBg').onclick = () => { if (edit){ edit.undo.push(ex.getImageData(0, 0, ec.width, ec.height)); ex.putImageData(edit.orig, 0, 0); } };
+
+// Crop away see-through edges so the picture fills its space
+function trimmed(){
+  const W = ec.width, H = ec.height, d = ex.getImageData(0, 0, W, H).data;
+  let x0 = W, y0 = H, x1 = -1, y1 = -1;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (d[(y * W + x) * 4 + 3] > 20){
+    if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  if (x1 < 0) return ec.toDataURL('image/png');
+  const c = document.createElement('canvas'); c.width = x1 - x0 + 1; c.height = y1 - y0 + 1;
+  c.getContext('2d').drawImage(ec, x0, y0, c.width, c.height, 0, 0, c.width, c.height);
+  return c.toDataURL('image/png');
+}
+$('addPic').onclick = () => {
+  const name = $('picName').value.trim().toLowerCase();
+  if (!edit) return picErr('Choose a picture first.');
+  if (!name) return picErr('Give your picture a name.');
+  if (!/^[a-z0-9 _-]{1,20}$/.test(name)) return picErr('Use only letters, numbers and spaces (20 max).');
+  const updating = !!images[name];
+  images[name] = trimmed();
+  if (!store.set('cgs-images', JSON.stringify(images))) picErr('Picture added, but it will disappear on reload. The storage is full — delete an old picture.');
+  else picErr('');
+  $('file').value = ''; $('picName').value = ''; $('editor').hidden = true; edit = null;
+  renderPics(); renderAll();
+  $('ok').textContent = updating ? `Updated "${name}".` : `Added "${name}". Try: game.clicker = "${name}";`;
+};
+$('pics').addEventListener('click', e => {
+  const ed = e.target.dataset && e.target.dataset.edit;
+  if (ed){ loadIntoEditor(images[ed], ed); $('editor').scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+  const k = e.target.dataset && e.target.dataset.del; if (!k) return;
+  delete images[k]; store.set('cgs-images', JSON.stringify(images)); renderPics(); renderAll();
+});
+
+// ---------- Save and open game files ----------
+function saveMsg(ok, err){ $('saveOk').textContent = ok || ''; $('saveErr').textContent = err || ''; $('saveErr').classList.toggle('show', !!err); }
+$('saveGame').onclick = () => {
+  store.set('cgs-code', $('code').value);
+  const data = { app: 'clicker-game-studio', version: 1, savedAt: new Date().toISOString(),
+    code: $('code').value, images, music, state };
+  const slug = (String(game.name || 'my-game').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'my-game');
+  const file = slug + '.json';
+  if (window.self !== window.top){
+    saveMsg('', "Downloads don't work in this preview. Open the game from your class link to download.");
+    return;
+  }
+  try {
+    const blob = new Blob([JSON.stringify(data)], { type: 'application/octet-stream' });
+    const url = URL.createObjectURL(blob), a = document.createElement('a');
+    a.href = url; a.download = file; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    saveMsg(`Saved "${file}". On an iPad, look in the Files app under Downloads.`);
+  } catch(e){ saveMsg('', "The download didn't work. Try again."); }
+};
+let pendingGame = null;
+$('openGame').onchange = () => {
+  const f = $('openGame').files[0]; if (!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    let d;
+    try { d = JSON.parse(reader.result); } catch(e){ d = null; }
+    $('openGame').value = '';
+    if (!d || d.app !== 'clicker-game-studio' || typeof d.code !== 'string'){
+      saveMsg('', "That isn't a Clicker Game Studio file. Pick a file you downloaded with \"Download my game\"."); return;
+    }
+    pendingGame = d;
+    saveMsg(`Open "${f.name}"? It will replace the game you have now.`);
+    $('confirmOpen').hidden = false;
+  };
+  reader.readAsText(f);
+};
+$('noOpen').onclick = () => { pendingGame = null; $('confirmOpen').hidden = true; saveMsg(); };
+$('yesOpen').onclick = () => { if (pendingGame) openPending(); };
+function openPending(){
+  const d = pendingGame; pendingGame = null;
+  $('confirmOpen').hidden = true;
+  $('code').value = d.code;
+  if (d.images && typeof d.images === 'object') images = Object.assign({}, d.images);
+  if (d.music && Array.isArray(d.music.grid) && d.music.grid.length === ROWS.length){ stopMusic(); music = d.music; }
+  if (d.state && typeof d.state === 'object'){
+    state = Object.assign({ points: 0, total: 0, owned: {}, prizes: {}, rebirths: 0 }, d.state);
+  }
+  boosts = []; stopAuto();
+  if (!store.set('cgs-images', JSON.stringify(images))) saveMsg('', 'Opened, but the pictures are too big to keep after a reload.');
+  saveMusic(); save();
+  $('tempo').value = music.tempo; $('tempoOut').textContent = music.tempo; $('voice').value = music.voice;
+  renderPics(); renderGrid();
+  if (runCode()) saveMsg('Game opened!');
+}
+
+// ---------- Game loop ----------
+function save(){ store.set('cgs-state', JSON.stringify(state)); }
+let ticks = 0;
+setInterval(() => {
+  const ps = perSecond();
+  if (ps) api.addPoints(ps / 10);
+  autoTick();
+  if (++ticks % 10 === 0){ secondFns.forEach(fn => safe(fn)); save(); }
+  checkPrizes(); update();
+}, 100);
+addEventListener('pagehide', save);
+
+$('code').value = store.get('cgs-code') || EXAMPLE;
+renderPics();
+renderGrid();
+runCode();
+}
+</script>
+</body>
+</html>
