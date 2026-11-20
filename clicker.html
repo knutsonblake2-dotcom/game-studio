@@ -81,6 +81,13 @@ textarea{width:100%;min-height:520px;resize:vertical;background:var(--code-bg);c
 .field input[type=text]{min-height:48px;border:3px solid var(--line);border-radius:12px;padding:0 12px;background:var(--card);font-size:17px}
 .field input[type=file]{font-size:15px}
 .pics{display:grid;gap:8px;margin-top:12px}
+.swatches{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+.sw{aspect-ratio:1;min-height:40px;border:3px solid var(--line);border-radius:12px;padding:0}
+.sw[aria-pressed=true]{outline:3px solid var(--line);outline-offset:3px}
+.pickrow{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:12px}
+.pickwrap{width:52px;height:48px;border:3px solid var(--line);border-radius:12px;overflow:hidden;display:block;position:relative}
+.pickwrap input{position:absolute;inset:-8px;width:calc(100% + 16px);height:calc(100% + 16px);border:0;padding:0;cursor:pointer}
+#colorCode{font-size:16px;font-weight:700}
 .pic{display:grid;grid-template-columns:52px minmax(0,1fr);gap:10px;align-items:center}
 .pic img{width:52px;height:52px;object-fit:contain;border:2px solid var(--line);border-radius:10px;background:#fff}
 code,.cheat dt{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:14px;overflow-wrap:anywhere}
@@ -205,6 +212,17 @@ input[type=range]{accent-color:var(--coral);width:130px}
         </div>
         <div class="err" id="saveErr"></div>
         <p class="ok" id="saveOk"></p>
+      </div>
+      <div class="card">
+        <h2>Pick a color</h2>
+        <p class="hint" style="margin-top:0">1. Tap the line in your code with the color. 2. Pick a color. 3. Tap "Put it in my code".</p>
+        <div class="swatches" id="swatches"></div>
+        <div class="pickrow">
+          <label class="pickwrap" aria-label="Choose any color"><input type="color" id="colorPick" value="#ff4f8b"></label>
+          <code id="colorCode">"#ff4f8b"</code>
+          <button class="btn go" id="putColor">Put it in my code</button>
+        </div>
+        <p class="ok" id="colorOk">Color names work too, like "gold", "hotpink" or "skyblue".</p>
       </div>
       <div class="card">
         <h2>Your pictures</h2>
@@ -1043,6 +1061,35 @@ $('code').value = store.get('cgs-code') || EXAMPLE;
 renderPics();
 renderGrid();
 runCode();
+// ---------- Color picker that writes the code for you ----------
+{
+  const SW = [['red','#ff3b30'],['orange','#ff9500'],['gold','#ffd23f'],['green','#34c759'],['teal','#2ec4b6'],['sky blue','#5ec8ff'],
+              ['blue','#2f6bff'],['purple','#8f6bff'],['pink','#ff4f8b'],['brown','#8b5a2b'],['white','#ffffff'],['black','#13213a']];
+  let picked = '#ff4f8b';
+  const showPick = (hex, btn) => {
+    picked = hex.toLowerCase(); $('colorPick').value = picked; $('colorCode').textContent = `"${picked}"`;
+    document.querySelectorAll('#swatches .sw').forEach(b => b.setAttribute('aria-pressed', b === btn));
+  };
+  $('swatches').innerHTML = SW.map(([n, h]) => `<button class="sw" style="background:${h}" data-hex="${h}" aria-label="${n}" title="${n}"></button>`).join('');
+  $('swatches').addEventListener('click', e => { const b = e.target.closest('.sw'); if (b) showPick(b.dataset.hex, b); });
+  $('colorPick').addEventListener('input', () => showPick($('colorPick').value, null));
+  $('putColor').onclick = () => {
+    const t = $('code'), v = t.value, pos = t.selectionStart ?? 0;
+    const ls = v.lastIndexOf('\n', pos - 1) + 1, le = v.indexOf('\n', pos) === -1 ? v.length : v.indexOf('\n', pos);
+    const line = v.slice(ls, le), m = /("|')(#[0-9a-fA-F]{3,8}|[a-zA-Z ]+)\1/.exec(line);
+    if (m && /color|sky|background|ground|block|spike|trail|player|clicker/i.test(line)){
+      const start = ls + m.index + 1, end = start + m[2].length;
+      t.setRangeText(picked, start, end, 'select');
+      $('colorOk').textContent = 'Done! Tap "Run my code" to see it.';
+    } else {
+      t.setRangeText(`"${picked}"`, pos, t.selectionEnd ?? pos, 'end');
+      $('colorOk').textContent = 'Added at your cursor. Tap "Run my code" to see it.';
+    }
+    store.set('cgs-code', t.value);
+    t.focus({ preventScroll: true });
+  };
+}
+
 }
 </script>
 </body>
