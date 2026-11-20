@@ -109,6 +109,13 @@ code,.cheat dt{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:14p
 #genCode{margin:12px 0 0;max-height:320px;overflow:auto;background:var(--code-bg);color:var(--code-ink);border-radius:14px;padding:12px 14px;font:13px/1.5 "JetBrains Mono",ui-monospace,monospace;white-space:pre}
 .blocklyToolboxCategory{min-height:40px}
 @media(max-width:820px){#blocklyDiv{height:520px}}
+.edbtns{display:flex;gap:8px;align-items:center;margin:0 0 12px}
+.edbtns .modes{margin:0}
+.card.expanded{position:fixed;inset:0;z-index:50;border-radius:0;border-width:0;box-shadow:none;margin:0;overflow:auto;padding:max(12px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) max(14px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left))}
+.card.expanded #blocklyDiv{height:calc(100dvh - 190px);min-height:320px}
+.card.expanded textarea{height:calc(100dvh - 190px);min-height:320px;font-size:16px}
+.card.expanded #genCode{max-height:30dvh}
+body.noscroll{overflow:hidden}
 [hidden]{display:none!important}
 @media(max-width:820px){.build{grid-template-columns:minmax(0,1fr)}textarea{min-height:460px}.controls .tip{margin-left:0}}
 @media(prefers-reduced-motion:reduce){.cell{transition:none}}
@@ -140,9 +147,9 @@ code,.cheat dt{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:14p
   </section>
 
   <section id="build" class="build" hidden>
-    <div class="card">
+    <div class="card" id="editorCard">
       <div class="headrow"><h2>Your game</h2>
-        <div class="modes" role="group" aria-label="Build with"><button id="modeBlocks" aria-pressed="true">Blocks</button><button id="modeCode" aria-pressed="false">Code</button></div></div>
+        <div class="edbtns"><div class="modes" role="group" aria-label="Build with"><button id="modeBlocks" aria-pressed="true">Blocks</button><button id="modeCode" aria-pressed="false">Code</button></div><button class="btn" id="expandBtn" aria-pressed="false">Expand</button></div></div>
       <div id="blocksArea">
         <div id="blocklyDiv"></div>
         <p class="ok" id="blockMsg"></p>
@@ -1193,8 +1200,8 @@ function showBlocksUI(){
     componentStyles: { workspaceBackgroundColour: '#f6f9ff', toolboxBackgroundColour: '#13213a', toolboxForegroundColour: '#ffffff', flyoutBackgroundColour: '#e8eefb', flyoutOpacity: 1, scrollbarColour: '#9aa7c7' } });
   const fromStarter = !readJSON(KEYP + 'blocks', null);
   const initial = savedBlocks();
-  BK.ws = Blockly.inject('blocklyDiv', { toolbox: TOOLBOX, trashcan: true, sounds: false, renderer: 'zelos', theme,
-    zoom: { controls: true, wheel: false, pinch: true, startScale: .72, maxScale: 1.6, minScale: .35 }, move: { scrollbars: true, drag: true, wheel: true } });
+  BK.ws = Blockly.inject('blocklyDiv', { toolbox: TOOLBOX, trashcan: true, sounds: false, media: 'vendor/media/', renderer: 'zelos', theme,
+    zoom: { controls: true, wheel: false, pinch: true, startScale: .9, maxScale: 1.6, minScale: .35 }, move: { scrollbars: true, drag: true, wheel: true } });
   try { Blockly.serialization.workspaces.load(initial, BK.ws); }
   catch(e){ Blockly.serialization.workspaces.load(STARTER_BLOCKS(), BK.ws); }
   if (fromStarter && KEYP === 'dgs-') BK.ws.cleanUp();
@@ -1354,6 +1361,21 @@ requestAnimationFrame(frame);
     t.focus({ preventScroll: true });
   };
 }
+
+// ---------- Expand the editor to full screen ----------
+function setExpanded(on){
+  $('editorCard').classList.toggle('expanded', on); document.body.classList.toggle('noscroll', on);
+  $('expandBtn').setAttribute('aria-pressed', on); $('expandBtn').textContent = on ? 'Close' : 'Expand';
+  setTimeout(() => {
+    if (BK.ws && !$('blocksArea').hidden){
+      Blockly.svgResize(BK.ws);
+    }
+  }, 60);
+}
+$('expandBtn').onclick = () => setExpanded(!$('editorCard').classList.contains('expanded'));
+$('run').addEventListener('click', () => setExpanded(false));
+addEventListener('keydown', e => { if (e.key === 'Escape' && $('editorCard').classList.contains('expanded')) setExpanded(false); });
+['play', 'music'].forEach(v => $('tab-' + v).addEventListener('click', () => setExpanded(false)));
 
 }
 </script>
